@@ -1,0 +1,27 @@
+export { authService } from './auth'
+export { dashboardService } from './dashboard'
+export { usersService } from './users'
+export { financeService } from './finance'
+export { feeService } from './fee'
+export { academicsService } from './academics'
+export { accessControlService } from './access-control'
+export { metadataService } from './metadata'
+export { auditService } from './audit'
+export { storage, STORAGE_KEYS } from './storage'
+
+// Legacy services (localStorage-based, kept for modules not yet migrated)
+export { tenantService } from './tenant'
+export { studentService } from './student'
+export { parentService } from './parent'
+export { employeeService } from './employee'
+export { attendanceService } from './attendance'
+export { inventoryService } from './inventory'
+export { taskService } from './task'
+
+// Re-export key types
+export type { UserListItem, ApiUserRole, CreateUserRequest, UpdateUserRequest } from './users'
+export type { GlAccount, FinanceTransaction, FinanceOverview, Budget, GlAccountType, TransactionType } from './finance'
+export type { FeeStructure, FeeInvoice, FeePayment, FeeReceipt, FeeDiscount, FeeComponent, FeeDashboardSummary, FeeSettings, PaymentMethod, InvoiceStatus } from './fee'
+export type { AcademicClass, AcademicSection } from './academics'
+export type { BootstrapResponse, DashboardSummary } from './dashboard'
+export type { AuditLog } from './audit'
