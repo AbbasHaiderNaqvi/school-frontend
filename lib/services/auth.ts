@@ -12,6 +12,7 @@ export interface AuthResponse {
   user?: User
   tenant?: ApiTenant
   features?: Record<string, boolean>
+  permissions?: string[]
   error?: string
 }
 
@@ -51,6 +52,7 @@ interface ApiLoginResponse {
   }
   tenant: ApiTenant
   features: Record<string, boolean>
+  permissions?: { flat: string[]; byModule: Record<string, string[]> }
 }
 
 function mapApiRoleToUserRole(apiRole: string): UserRole {
@@ -100,11 +102,14 @@ export const authService = {
 
       const user = mapApiUserToUser(data.user, data.tenant?.id)
 
-      // Persist session with tenant + features
+      const permissions = data.permissions?.flat ?? []
+
+      // Persist session with tenant + features + permissions
       const session = {
         user,
         tenant: data.tenant,
         features: data.features,
+        permissions,
       }
       storage.set(SESSION_KEY, session)
       storage.set(STORAGE_KEYS.CURRENT_USER, user)
@@ -114,6 +119,7 @@ export const authService = {
         user,
         tenant: data.tenant,
         features: data.features,
+        permissions,
       }
     }
 
@@ -140,7 +146,7 @@ export const authService = {
     return storage.get<User>(STORAGE_KEYS.CURRENT_USER)
   },
 
-  getSession(): { user: User; tenant: ApiTenant; features: Record<string, boolean> } | null {
+  getSession(): { user: User; tenant: ApiTenant; features: Record<string, boolean>; permissions?: string[] } | null {
     return storage.get(SESSION_KEY)
   },
 

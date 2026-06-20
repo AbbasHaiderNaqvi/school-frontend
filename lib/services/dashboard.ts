@@ -33,12 +33,20 @@ export interface BootstrapResponse {
 }
 
 export interface DashboardSummary {
-  totalUsers: number
-  activeUsers: number
+  users: {
+    total: number
+    active: number
+    invited: number
+    inactive: number
+  }
   finance: {
-    totalIncome: string
-    totalExpense: string
-    netBalance: string
+    income: string
+    expenses: string
+    netIncome: string
+  }
+  features: {
+    enabledCount: number
+    disabledCount: number
   }
 }
 

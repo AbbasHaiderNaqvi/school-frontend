@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -156,7 +157,7 @@ export default function CashierCounterPage() {
               <DollarSign className="h-5 w-5 text-blue-600" />
               <div>
                 <p className="text-sm text-muted-foreground">Collected Today</p>
-                <p className="text-xl font-bold">${fmt(totalToday)}</p>
+                <p className="text-xl font-bold">{money(totalToday)}</p>
               </div>
             </div>
           </CardContent>
@@ -231,9 +232,9 @@ export default function CashierCounterPage() {
                             }>{inv.status}</Badge>
                           </div>
                           <div className="text-right space-y-1">
-                            <p className="text-sm text-muted-foreground">Net: ${fmt(inv.netAmount)}</p>
-                            <p className="text-sm text-muted-foreground">Paid: ${fmt(inv.paidAmount)}</p>
-                            <p className="font-bold text-orange-600">Balance: ${fmt(inv.balanceAmount)}</p>
+                            <p className="text-sm text-muted-foreground">Net: {money(inv.netAmount)}</p>
+                            <p className="text-sm text-muted-foreground">Paid: {money(inv.paidAmount)}</p>
+                            <p className="font-bold text-orange-600">Balance: {money(inv.balanceAmount)}</p>
                             <Button size="sm" onClick={() => handlePayInvoice(inv)}>
                               <CheckCircle2 className="mr-1 h-4 w-4" /> Pay Now
                             </Button>
@@ -291,7 +292,7 @@ export default function CashierCounterPage() {
                         <TableCell className="font-mono text-sm">{p.invoiceId.slice(-8)}</TableCell>
                         <TableCell><Badge variant="outline">{p.paymentMethod}</Badge></TableCell>
                         <TableCell className="text-sm font-mono">{p.referenceNo ?? '—'}</TableCell>
-                        <TableCell className="text-right font-semibold text-green-600">${fmt(p.amount)}</TableCell>
+                        <TableCell className="text-right font-semibold text-green-600">{money(p.amount)}</TableCell>
                         <TableCell className="text-sm">{p.paymentDate}</TableCell>
                       </TableRow>
                     ))}
@@ -308,7 +309,7 @@ export default function CashierCounterPage() {
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
-              {selectedInvoice ? `Invoice ${selectedInvoice.invoiceNo} — Balance: $${fmt(selectedInvoice.balanceAmount)}` : ''}
+              {selectedInvoice ? `Invoice ${selectedInvoice.invoiceNo} — Balance: ${money(selectedInvoice.balanceAmount)}` : ''}
             </DialogDescription>
           </DialogHeader>
           {submitError && <Alert variant="destructive"><AlertDescription>{submitError}</AlertDescription></Alert>}

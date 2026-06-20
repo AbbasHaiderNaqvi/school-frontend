@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useAuth } from '@/contexts/auth-context'
 import { useEffect, useState, useCallback } from 'react'
 import { financeService } from '@/lib/services/finance'
@@ -30,7 +31,7 @@ export default function ThresholdManagementPage() {
   const [newThreshold, setNewThreshold] = useState('')
   const [newEnabled, setNewEnabled] = useState(true)
 
-  const canManageThreshold = user?.role === 'tenant_owner' || user?.role === 'admin'
+  const canManageThreshold = user?.role === 'tenant_owner' || user?.role === 'tenant_admin' || user?.role === 'tenant_principal'
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true)
@@ -105,12 +106,12 @@ export default function ThresholdManagementPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Threshold Amount</p>
-                    <p className="text-4xl font-bold text-primary">${fmt(settings.threshold)}</p>
+                    <p className="text-4xl font-bold text-primary">{money(settings.threshold)}</p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {settings.enabled
-                    ? `Expenses above $${fmt(settings.threshold)} require approval`
+                    ? `Expenses above ${money(settings.threshold)} require approval`
                     : 'Expense approval workflow is currently disabled'}
                 </p>
               </div>

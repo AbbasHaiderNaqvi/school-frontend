@@ -1,5 +1,6 @@
 'use client'
 
+import { CURRENCY_SYMBOL } from '@/lib/currency'
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -95,7 +96,7 @@ export default function InventoryOverviewPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.totalValue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{CURRENCY_SYMBOL} {stats.totalValue.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">Current inventory value</p>
           </CardContent>
         </Card>

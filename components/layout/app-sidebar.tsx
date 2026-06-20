@@ -13,6 +13,7 @@ import { getInitials } from '@/lib/utils'
 import {
   GraduationCap,
   LayoutDashboard,
+  LayoutList,
   Building2,
   Users,
   Wallet,
@@ -132,6 +133,16 @@ const navItems: NavItem[] = [
       { title: 'Items', href: '/dashboard/inventory/items', icon: Package },
       { title: 'Assets', href: '/dashboard/inventory/assets', icon: Package },
       { title: 'Movements', href: '/dashboard/inventory/movements', icon: FileText },
+    ],
+  },
+  {
+    title: 'Academics',
+    icon: GraduationCap,
+    roles: ['tenant_admin', 'tenant_principal', 'teacher', 'tenant_owner'],
+    featureFlag: 'academics_module',
+    children: [
+      { title: 'Classes', href: '/dashboard/academics/classes', icon: GraduationCap },
+      { title: 'Sections', href: '/dashboard/academics/sections', icon: LayoutList },
     ],
   },
   {

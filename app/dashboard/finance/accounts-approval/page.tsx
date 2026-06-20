@@ -1,237 +1,174 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { money } from '@/lib/currency'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
-import { CheckCircle, XCircle, Clock, DollarSign, AlertCircle } from 'lucide-react'
+import type { FinanceTransaction } from '@/lib/services/finance'
+import { CheckCircle, XCircle, Clock, DollarSign, AlertCircle, Loader2 } from 'lucide-react'
 
-interface PendingTransaction {
-  id: string
-  description: string
-  amount: number
-  category: string
-  requestedBy: string
-  requestedByName: string
-  date: string
-  status: string
-  requiresApproval: boolean
+function fmt(val: string | number | undefined): string {
+  const n = parseFloat(String(val ?? 0))
+  return isNaN(n) ? '0.00' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function AccountsApprovalPage() {
-  const { user } = useAuth()
-  const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([])
-  const [approvedTransactions, setApprovedTransactions] = useState<PendingTransaction[]>([])
-  const [rejectedTransactions, setRejectedTransactions] = useState<PendingTransaction[]>([])
-  const [threshold, setThreshold] = useState(5000)
-  const [selectedTransaction, setSelectedTransaction] = useState<PendingTransaction | null>(null)
-  const [approvalDialog, setApprovalDialog] = useState(false)
+  const { can } = useAuth()
+  const [pending, setPending] = useState<FinanceTransaction[]>([])
+  const [threshold, setThreshold] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [selected, setSelected] = useState<FinanceTransaction | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [comments, setComments] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [actionError, setActionError] = useState('')
 
-  useEffect(() => {
-    loadData()
-  }, [user])
-
-  const loadData = async () => {
-    if (!user?.tenantId) return
-
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError('')
     try {
-      const currentThreshold = await financeService.getCurrentThreshold(user.tenantId)
-      setThreshold(currentThreshold)
-
-      const transactions = await financeService.getTransactions(user.tenantId)
-      
-      const pending = transactions.filter((t: any) => 
-        t.amount > currentThreshold && t.status === 'pending'
-      )
-      const approved = transactions.filter((t: any) => 
-        t.amount > currentThreshold && t.status === 'approved'
-      )
-      const rejected = transactions.filter((t: any) => 
-        t.amount > currentThreshold && t.status === 'rejected'
-      )
-
-      setP endingTransactions(pending)
-      setApprovedTransactions(approved)
-      setRejectedTransactions(rejected)
-    } catch (error) {
-      console.error('[v0] Error loading data:', error)
+      const [expenses, settings] = await Promise.all([
+        financeService.getPendingExpenses(),
+        financeService.getExpenseApproval(),
+      ])
+      setPending(expenses)
+      setThreshold(settings?.threshold ?? null)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => { loadData() }, [loadData])
+
+  if (!can('finance.expense_approval.read')) return <AccessDenied />
 
   const handleApprove = async () => {
-    if (!selectedTransaction || !user) return
-
-    setLoading(true)
-    try {
-      // In real implementation, update transaction status
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      alert('Transaction approved successfully')
-      setApprovalDialog(false)
-      setComments('')
-      loadData()
-    } catch (error) {
-      console.error('[v0] Error approving:', error)
-      alert('Error approving transaction')
-    } finally {
-      setLoading(false)
+    if (!selected) return
+    setIsSubmitting(true)
+    setActionError('')
+    const ok = await financeService.approveExpense(selected.id, comments || undefined)
+    if (!ok) {
+      setActionError('Failed to approve transaction')
+      setIsSubmitting(false)
+      return
     }
+    setDialogOpen(false)
+    setComments('')
+    setSelected(null)
+    loadData()
   }
 
   const handleReject = async () => {
-    if (!selectedTransaction || !user) return
-
-    setLoading(true)
-    try {
-      // In real implementation, update transaction status
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      alert('Transaction rejected')
-      setApprovalDialog(false)
-      setComments('')
-      loadData()
-    } catch (error) {
-      console.error('[v0] Error rejecting:', error)
-      alert('Error rejecting transaction')
-    } finally {
-      setLoading(false)
+    if (!selected || !comments.trim()) return
+    setIsSubmitting(true)
+    setActionError('')
+    const ok = await financeService.rejectExpense(selected.id, comments)
+    if (!ok) {
+      setActionError('Failed to reject transaction')
+      setIsSubmitting(false)
+      return
     }
+    setDialogOpen(false)
+    setComments('')
+    setSelected(null)
+    loadData()
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
-  }
-
-  const getStatusBadge = (status: string) => {
-    const colors = {
-      pending: 'bg-yellow-500',
-      approved: 'bg-green-500',
-      rejected: 'bg-red-500',
-    }
-    return <Badge className={colors[status as keyof typeof colors] || 'bg-gray-500'}>{status.toUpperCase()}</Badge>
-  }
-
-  if (!user || !['tenant_owner', 'trustee', 'admin'].includes(user.role)) {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Access Denied</CardTitle>
-            <CardDescription>You do not have permission to view this page</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
+  const openReview = (t: FinanceTransaction) => {
+    setSelected(t)
+    setComments('')
+    setActionError('')
+    setDialogOpen(true)
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Accounts Approval</h1>
-          <p className="text-muted-foreground">Review and approve transactions exceeding threshold</p>
-        </div>
-        <Card className="p-4">
-          <div className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-primary" />
-            <div>
-              <div className="text-sm text-muted-foreground">Approval Threshold</div>
-              <div className="text-xl font-bold">{formatCurrency(threshold)}</div>
-            </div>
-          </div>
-        </Card>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Accounts Approval"
+        description="Review and approve expense transactions pending authorization"
+        action={
+          threshold !== null ? (
+            <Card className="px-4 py-2 flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground">Approval Threshold</p>
+                <p className="text-sm font-bold">{money(threshold)}</p>
+              </div>
+            </Card>
+          ) : undefined
+        }
+      />
 
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pendingTransactions.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatCurrency(pendingTransactions.reduce((sum, t) => sum + t.amount, 0))} total
-            </p>
+          <CardContent className="flex items-center justify-between pt-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Pending Approval</p>
+              <p className="text-2xl font-bold">{pending.length}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-amber-100"><Clock className="h-6 w-6 text-amber-600" /></div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approved</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{approvedTransactions.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatCurrency(approvedTransactions.reduce((sum, t) => sum + t.amount, 0))} total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rejected</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{rejectedTransactions.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatCurrency(rejectedTransactions.reduce((sum, t) => sum + t.amount, 0))} total
-            </p>
+          <CardContent className="flex items-center justify-between pt-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Total Pending Amount</p>
+              <p className="text-2xl font-bold">{money(pending.reduce((s, t) => s + parseFloat(t.amount), 0))}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-primary/10"><DollarSign className="h-6 w-6 text-primary" /></div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Pending Transactions */}
       <Card>
         <CardHeader>
           <CardTitle>Pending Approvals</CardTitle>
-          <CardDescription>Transactions requiring your approval</CardDescription>
+          <CardDescription>Expense transactions requiring authorization</CardDescription>
         </CardHeader>
         <CardContent>
-          {pendingTransactions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
+          {isLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          ) : pending.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <AlertCircle className="h-10 w-10 mx-auto mb-2 opacity-40" />
               <p>No pending transactions</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {pendingTransactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1">
+            <div className="space-y-3">
+              {pending.map(t => (
+                <div key={t.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold">{transaction.description}</h3>
-                      {getStatusBadge(transaction.status)}
+                      <span className="font-semibold truncate">{t.description}</span>
+                      <Badge className="bg-amber-100 text-amber-800 shrink-0">Pending</Badge>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Category: {transaction.category} | Requested by: {transaction.requestedByName}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Date: {new Date(transaction.date).toLocaleDateString()}
-                    </div>
+                    <p className="text-xs text-muted-foreground font-mono">{t.reference}</p>
+                    {t.categoryAccount && (
+                      <p className="text-xs text-muted-foreground">{t.categoryAccount.code} — {t.categoryAccount.name}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">{t.date}</p>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="text-2xl font-bold">{formatCurrency(transaction.amount)}</div>
-                      {transaction.amount > threshold && (
-                        <div className="text-xs text-yellow-600">Exceeds threshold</div>
-                      )}
-                    </div>
-                    <Button onClick={() => {
-                      setSelectedTransaction(transaction)
-                      setApprovalDialog(true)
-                    }}>
-                      Review
-                    </Button>
+                  <div className="flex items-center gap-4 ml-4">
+                    <p className="text-xl font-bold">{money(t.amount)}</p>
+                    {(can('finance.transaction.approve') || can('finance.transaction.reject')) && (
+                      <Button size="sm" onClick={() => openReview(t)}>Review</Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -240,67 +177,77 @@ export default function AccountsApprovalPage() {
         </CardContent>
       </Card>
 
-      {/* Approval Dialog */}
-      <Dialog open={approvalDialog} onOpenChange={setApprovalDialog}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Review Transaction</DialogTitle>
-            <DialogDescription>Approve or reject this transaction</DialogDescription>
+            <DialogDescription>Approve or reject this expense</DialogDescription>
           </DialogHeader>
 
-          {selectedTransaction && (
+          {selected && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <div className="text-sm text-muted-foreground">Description</div>
-                  <div className="font-semibold">{selectedTransaction.description}</div>
+                  <p className="text-muted-foreground">Reference</p>
+                  <p className="font-mono font-medium">{selected.reference}</p>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Amount</div>
-                  <div className="text-2xl font-bold">{formatCurrency(selectedTransaction.amount)}</div>
+                  <p className="text-muted-foreground">Amount</p>
+                  <p className="text-xl font-bold">{money(selected.amount)}</p>
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Category</div>
-                  <div>{selectedTransaction.category}</div>
+                <div className="col-span-2">
+                  <p className="text-muted-foreground">Description</p>
+                  <p className="font-medium">{selected.description}</p>
                 </div>
+                {selected.categoryAccount && (
+                  <div>
+                    <p className="text-muted-foreground">Category</p>
+                    <p>{selected.categoryAccount.name}</p>
+                  </div>
+                )}
                 <div>
-                  <div className="text-sm text-muted-foreground">Requested By</div>
-                  <div>{selectedTransaction.requestedByName}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Date</div>
-                  <div>{new Date(selectedTransaction.date).toLocaleDateString()}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Status</div>
-                  {getStatusBadge(selectedTransaction.status)}
+                  <p className="text-muted-foreground">Date</p>
+                  <p>{selected.date}</p>
                 </div>
               </div>
 
               <div>
-                <label className="text-sm font-medium">Comments (Optional)</label>
+                <label className="text-sm font-medium">
+                  Comments {can('finance.transaction.reject') ? '(required to reject)' : '(optional)'}
+                </label>
                 <Textarea
                   value={comments}
-                  onChange={(e) => setComments(e.target.value)}
-                  placeholder="Add any comments or notes..."
+                  onChange={e => setComments(e.target.value)}
+                  placeholder="Add notes or rejection reason…"
                   rows={3}
+                  className="mt-1"
                 />
               </div>
+
+              {actionError && (
+                <Alert variant="destructive"><AlertDescription>{actionError}</AlertDescription></Alert>
+              )}
             </div>
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setApprovalDialog(false)} disabled={loading}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleReject} disabled={loading}>
-              <XCircle className="mr-2 h-4 w-4" />
-              Reject
-            </Button>
-            <Button onClick={handleApprove} disabled={loading}>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Approve
-            </Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+            {can('finance.transaction.reject') && (
+              <Button
+                variant="destructive"
+                onClick={handleReject}
+                disabled={isSubmitting || !comments.trim()}
+              >
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <XCircle className="mr-2 h-4 w-4" /> Reject
+              </Button>
+            )}
+            {can('finance.transaction.approve') && (
+              <Button onClick={handleApprove} disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <CheckCircle className="mr-2 h-4 w-4" /> Approve
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
@@ -17,6 +18,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { feeService } from '@/lib/services/fee'
 import type { FeePayment, FeeInvoice, PaymentMethod } from '@/lib/services/fee'
 import {
@@ -48,9 +50,10 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
 }
 
 export default function PaymentsPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
   const [payments, setPayments] = useState<FeePayment[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
   const [showDialog, setShowDialog] = useState(false)
@@ -66,9 +69,15 @@ export default function PaymentsPage() {
 
   const loadPayments = useCallback(async () => {
     setIsLoading(true)
-    const result = await feeService.getPayments({ limit: 100 })
-    setPayments(result.data)
-    setIsLoading(false)
+    setLoadError('')
+    try {
+      const result = await feeService.getPayments({ limit: 100 })
+      setPayments(result.data)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadPayments() }, [loadPayments])
@@ -135,6 +144,8 @@ export default function PaymentsPage() {
   const todayPayments = payments.filter(p => p.paymentDate === today || p.createdAt.startsWith(today))
   const todayCollected = todayPayments.reduce((s, p) => s + parseFloat(p.amount), 0)
 
+  if (!can('fees.payment.read')) return <AccessDenied />
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -156,7 +167,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Collected</p>
-              <p className="text-2xl font-bold">${fmt(totalCollected)}</p>
+              <p className="text-2xl font-bold">{money(totalCollected)}</p>
             </div>
           </CardContent>
         </Card>
@@ -167,7 +178,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Today's Collection</p>
-              <p className="text-2xl font-bold">${fmt(todayCollected)}</p>
+              <p className="text-2xl font-bold">{money(todayCollected)}</p>
               <p className="text-xs text-muted-foreground">{todayPayments.length} payments</p>
             </div>
           </CardContent>
@@ -190,9 +201,11 @@ export default function PaymentsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search by reference or date…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
         </div>
-        <Button onClick={openRecordDialog}>
-          <Plus className="mr-2 h-4 w-4" /> Record Payment
-        </Button>
+        {can('fees.payment.create') && (
+          <Button onClick={openRecordDialog}>
+            <Plus className="mr-2 h-4 w-4" /> Record Payment
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -201,6 +214,11 @@ export default function PaymentsPage() {
           <CardDescription>All recorded fee payments</CardDescription>
         </CardHeader>
         <CardContent>
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
@@ -219,7 +237,7 @@ export default function PaymentsPage() {
                   <TableRow key={p.id}>
                     <TableCell className="text-muted-foreground">{p.paymentDate}</TableCell>
                     <TableCell className="font-mono text-sm">{p.invoiceId.slice(-8)}</TableCell>
-                    <TableCell className="text-right font-semibold text-green-600">${fmt(p.amount)}</TableCell>
+                    <TableCell className="text-right font-semibold text-green-600">{money(p.amount)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <MethodIcon className="h-4 w-4 text-muted-foreground" />
@@ -260,7 +278,7 @@ export default function PaymentsPage() {
                 <SelectContent>
                   {filteredInvoices.slice(0, 30).map(i => (
                     <SelectItem key={i.id} value={i.id}>
-                      {i.invoiceNo} — {i.studentName ?? 'Unknown'} — Balance: ${fmt(i.balanceAmount)}
+                      {i.invoiceNo} — {i.studentName ?? 'Unknown'} — Balance: {money(i.balanceAmount)}
                     </SelectItem>
                   ))}
                   {filteredInvoices.length === 0 && (
@@ -282,15 +300,15 @@ export default function PaymentsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total</span>
-                  <span className="font-medium">${fmt(selectedInvoice.totalAmount)}</span>
+                  <span className="font-medium">{money(selectedInvoice.totalAmount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Paid</span>
-                  <span className="font-medium text-green-600">${fmt(selectedInvoice.paidAmount)}</span>
+                  <span className="font-medium text-green-600">{money(selectedInvoice.paidAmount)}</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t">
                   <span className="font-semibold">Balance Due</span>
-                  <span className="font-bold text-orange-600">${fmt(selectedInvoice.balanceAmount)}</span>
+                  <span className="font-bold text-orange-600">{money(selectedInvoice.balanceAmount)}</span>
                 </div>
               </div>
             )}

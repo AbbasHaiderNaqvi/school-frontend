@@ -1,4 +1,4 @@
-import { api } from './api-client'
+import { api, toPaginated } from './api-client'
 
 export interface AcademicClass {
   id: string
@@ -32,14 +32,16 @@ export interface Paginated<T> {
 
 export const academicsService = {
   // Classes
-  async getClasses(params: { page?: number; limit?: number; search?: string } = {}): Promise<Paginated<AcademicClass>> {
+  async getClasses(params: { page?: number; limit?: number; search?: string; isActive?: boolean } = {}): Promise<Paginated<AcademicClass>> {
     const q = new URLSearchParams()
     if (params.page) q.set('page', String(params.page))
     if (params.limit) q.set('limit', String(params.limit))
     if (params.search) q.set('search', params.search)
+    if (params.isActive !== undefined) q.set('isActive', String(params.isActive))
     const qs = q.toString()
-    const { data } = await api.get<Paginated<AcademicClass>>(`/academics/classes${qs ? `?${qs}` : ''}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<AcademicClass>>(`/academics/classes${qs ? `?${qs}` : ''}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async getClassById(id: string): Promise<AcademicClass | null> {
@@ -65,14 +67,16 @@ export const academicsService = {
   },
 
   // Sections
-  async getSections(params: { classId?: string; page?: number; limit?: number } = {}): Promise<Paginated<AcademicSection>> {
+  async getSections(params: { classId?: string; page?: number; limit?: number; isActive?: boolean } = {}): Promise<Paginated<AcademicSection>> {
     const q = new URLSearchParams()
     if (params.classId) q.set('classId', params.classId)
     if (params.page) q.set('page', String(params.page))
     if (params.limit) q.set('limit', String(params.limit))
+    if (params.isActive !== undefined) q.set('isActive', String(params.isActive))
     const qs = q.toString()
-    const { data } = await api.get<Paginated<AcademicSection>>(`/academics/sections${qs ? `?${qs}` : ''}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<AcademicSection>>(`/academics/sections${qs ? `?${qs}` : ''}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async getSectionById(id: string): Promise<AcademicSection | null> {
@@ -80,13 +84,13 @@ export const academicsService = {
     return data || null
   },
 
-  async createSection(payload: { classId: string; name: string; capacity?: number }): Promise<{ section: AcademicSection | null; error?: string }> {
+  async createSection(payload: { classId: string; name: string; sortOrder?: number; capacity?: number }): Promise<{ section: AcademicSection | null; error?: string }> {
     const { data, error } = await api.post<AcademicSection>('/academics/sections', payload)
     if (error || !data) return { section: null, error: error || 'Failed to create section' }
     return { section: data }
   },
 
-  async updateSection(id: string, payload: { name?: string; capacity?: number; isActive?: boolean }): Promise<AcademicSection | null> {
+  async updateSection(id: string, payload: { name?: string; sortOrder?: number; capacity?: number; isActive?: boolean }): Promise<AcademicSection | null> {
     const { data } = await api.patch<AcademicSection>(`/academics/sections/${id}`, payload)
     return data || null
   },

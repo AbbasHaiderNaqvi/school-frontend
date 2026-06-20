@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
@@ -18,6 +19,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { feeService } from '@/lib/services/fee'
 import type { FeeStructure } from '@/lib/services/fee'
 import { academicsService } from '@/lib/services/academics'
@@ -32,10 +34,11 @@ function fmt(val: string | number | undefined): string {
 }
 
 export default function FeeStructuresPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
   const [structures, setStructures] = useState<FeeStructure[]>([])
   const [classes, setClasses] = useState<AcademicClass[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [showDialog, setShowDialog] = useState(false)
   const [editingStructure, setEditingStructure] = useState<FeeStructure | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -48,13 +51,19 @@ export default function FeeStructuresPage() {
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
-    const [strData, clsData] = await Promise.all([
-      feeService.getStructures({ limit: 100 }),
-      academicsService.getClasses({ limit: 100 }),
-    ])
-    setStructures(strData.data)
-    setClasses(clsData.data)
-    setIsLoading(false)
+    setLoadError('')
+    try {
+      const [strData, clsData] = await Promise.all([
+        feeService.getStructures({ limit: 100 }),
+        academicsService.getClasses({ limit: 100 }),
+      ])
+      setStructures(strData.data)
+      setClasses(clsData.data)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
@@ -147,6 +156,8 @@ export default function FeeStructuresPage() {
 
   const totalAmount = formComponents.reduce((s, c) => s + c.amount, 0)
 
+  if (!can('fees.structure.read')) return <AccessDenied />
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -160,11 +171,19 @@ export default function FeeStructuresPage() {
     <div className="space-y-6">
       <PageHeader title="Fee Structures" description="Define fee components and amounts for each class" />
 
+      {loadError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex justify-between items-center">
         <p className="text-muted-foreground">{structures.length} fee structure{structures.length !== 1 ? 's' : ''} defined</p>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" /> Create Structure
-        </Button>
+        {can('fees.structure.create') && (
+          <Button onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" /> Create Structure
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -184,21 +203,25 @@ export default function FeeStructuresPage() {
                 {(s.components ?? []).map(c => (
                   <div key={c.id} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{c.name}</span>
-                    <span className="font-medium">${fmt(c.amount)}</span>
+                    <span className="font-medium">{money(c.amount)}</span>
                   </div>
                 ))}
                 <div className="flex justify-between pt-2 border-t">
                   <span className="font-semibold">Total</span>
-                  <span className="font-bold text-primary">${fmt(s.totalAmount)}</span>
+                  <span className="font-bold text-primary">{money(s.totalAmount)}</span>
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => openEdit(s)}>
-                  <Edit className="mr-1 h-3 w-3" /> Edit
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => openDuplicate(s)} disabled={isSaving}>
-                  <Copy className="mr-1 h-3 w-3" /> Duplicate
-                </Button>
+                {can('fees.structure.update') && (
+                  <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => openEdit(s)}>
+                    <Edit className="mr-1 h-3 w-3" /> Edit
+                  </Button>
+                )}
+                {can('fees.structure.duplicate') && (
+                  <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => openDuplicate(s)} disabled={isSaving}>
+                    <Copy className="mr-1 h-3 w-3" /> Duplicate
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -210,7 +233,9 @@ export default function FeeStructuresPage() {
               <FileText className="mx-auto h-12 w-12 text-muted-foreground/50" />
               <h3 className="mt-4 text-lg font-semibold">No Fee Structures</h3>
               <p className="text-muted-foreground mt-2">Create your first fee structure to define fee components for a class.</p>
-              <Button className="mt-4" onClick={openCreate}><Plus className="mr-2 h-4 w-4" /> Create Structure</Button>
+              {can('fees.structure.create') && (
+                <Button className="mt-4" onClick={openCreate}><Plus className="mr-2 h-4 w-4" /> Create Structure</Button>
+              )}
             </CardContent>
           </Card>
         )}
@@ -300,7 +325,7 @@ export default function FeeStructuresPage() {
               </div>
               <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
                 <span className="font-semibold">Total Fee Amount</span>
-                <span className="text-2xl font-bold text-primary">${fmt(totalAmount)}</span>
+                <span className="text-2xl font-bold text-primary">{money(totalAmount)}</span>
               </div>
             </div>
           </div>

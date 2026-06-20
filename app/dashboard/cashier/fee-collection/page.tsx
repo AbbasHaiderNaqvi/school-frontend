@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { usersService } from '@/lib/services/users'
@@ -132,7 +133,7 @@ export default function FeeCollectionPage() {
   const handleDownloadReceipt = () => {
     if (!lastReceipt) return
     const lines = lastReceipt.lines.map(l =>
-      `<tr><td style="padding:4px 8px">${l.componentName}</td><td style="padding:4px 8px;text-align:right">$${fmt(l.amount)}</td></tr>`
+      `<tr><td style="padding:4px 8px">${l.componentName}</td><td style="padding:4px 8px;text-align:right">${money(l.amount)}</td></tr>`
     ).join('')
     const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:24px;border:1px solid #ddd;border-radius:8px">
       <div style="text-align:center;margin-bottom:24px;border-bottom:1px solid #eee;padding-bottom:16px">
@@ -147,7 +148,7 @@ export default function FeeCollectionPage() {
       ${lines ? `<table style="width:100%;margin:16px 0"><thead><tr><th style="text-align:left;padding:4px 8px">Component</th><th style="text-align:right;padding:4px 8px">Amount</th></tr></thead><tbody>${lines}</tbody></table>` : ''}
       <table style="width:100%;margin:16px 0;background:#e8f4fd;border-radius:4px">
         <tr><td style="padding:4px 8px;font-weight:bold">Method</td><td style="padding:4px 8px">${lastReceipt.payment.method}</td></tr>
-        <tr style="border-top:2px solid #ccc"><td style="padding:8px;font-size:18px;font-weight:bold">Amount Paid</td><td style="padding:8px;font-size:18px;font-weight:bold;text-align:right">$${fmt(lastReceipt.payment.amount)}</td></tr>
+        <tr style="border-top:2px solid #ccc"><td style="padding:8px;font-size:18px;font-weight:bold">Amount Paid</td><td style="padding:8px;font-size:18px;font-weight:bold;text-align:right">${money(lastReceipt.payment.amount)}</td></tr>
       </table>
     </body></html>`
     const blob = new Blob([html], { type: 'text/html' })
@@ -240,7 +241,7 @@ export default function FeeCollectionPage() {
                             inv.status === 'PARTIAL' ? 'bg-yellow-100 text-yellow-700' :
                             'bg-blue-100 text-blue-700'
                           }>{inv.status}</Badge>
-                          <p className="text-sm font-bold text-orange-600 mt-1">Balance: ${fmt(inv.balanceAmount)}</p>
+                          <p className="text-sm font-bold text-orange-600 mt-1">Balance: {money(inv.balanceAmount)}</p>
                         </div>
                       </div>
                     </div>
@@ -311,7 +312,7 @@ export default function FeeCollectionPage() {
             <div className="space-y-4">
               <div className="p-4 bg-green-50 rounded-lg text-center">
                 <CheckCircle2 className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                <p className="font-bold text-green-700 text-lg">${fmt(lastReceipt.payment.amount)} Collected</p>
+                <p className="font-bold text-green-700 text-lg">{money(lastReceipt.payment.amount)} Collected</p>
                 <p className="text-sm text-green-600">{lastReceipt.payment.method} · {lastReceipt.payment.paymentDate}</p>
               </div>
               <div className="text-sm space-y-1">
@@ -325,7 +326,7 @@ export default function FeeCollectionPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Balance After:</span>
-                  <span>${fmt(lastReceipt.invoice.balanceAfterPayment)}</span>
+                  <span>{money(lastReceipt.invoice.balanceAfterPayment)}</span>
                 </div>
               </div>
               <div className="flex gap-2">

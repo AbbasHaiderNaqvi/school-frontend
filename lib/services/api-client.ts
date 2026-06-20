@@ -121,6 +121,26 @@ export async function apiRequest<T = unknown>(
   }
 }
 
+// Normalizes any paginated-shaped response from the API, handling three cases:
+//   1. null/undefined       → empty page
+//   2. bare array  []       → wraps into { data, total, page, limit }
+//   3. { data:[] } (partial)→ fills missing total/page/limit with safe defaults
+export function toPaginated<T>(raw: unknown): { data: T[]; total: number; page: number; limit: number } {
+  const empty = { data: [] as T[], total: 0, page: 1, limit: 20 }
+  if (!raw) return empty
+  if (Array.isArray(raw)) {
+    return { data: raw as T[], total: raw.length, page: 1, limit: raw.length || 20 }
+  }
+  const p = raw as Record<string, unknown>
+  if (!Array.isArray(p.data)) return empty
+  return {
+    data: p.data as T[],
+    total: typeof p.total === 'number' ? p.total : (p.data as T[]).length,
+    page: typeof p.page === 'number' ? p.page : 1,
+    limit: typeof p.limit === 'number' ? p.limit : 20,
+  }
+}
+
 export const api = {
   get: <T>(endpoint: string, options?: RequestInit) =>
     apiRequest<T>(endpoint, { method: 'GET', ...options }),

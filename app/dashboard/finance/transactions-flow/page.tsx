@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -138,7 +139,7 @@ export default function TransactionFlowPage() {
             <ArrowDownLeft className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-green-600">${fmt(totalIncome)}</p>
+            <p className="text-2xl font-bold text-green-600">{money(totalIncome)}</p>
             <p className="text-xs text-muted-foreground">{transactions.filter(t => t.type === 'INCOME').length} transactions</p>
           </CardContent>
         </Card>
@@ -148,7 +149,7 @@ export default function TransactionFlowPage() {
             <ArrowUpRight className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-red-600">${fmt(totalExpense)}</p>
+            <p className="text-2xl font-bold text-red-600">{money(totalExpense)}</p>
             <p className="text-xs text-muted-foreground">{transactions.filter(t => t.type === 'EXPENSE').length} transactions</p>
           </CardContent>
         </Card>
@@ -158,7 +159,7 @@ export default function TransactionFlowPage() {
             <ArrowLeftRight className={`h-4 w-4 ${net >= 0 ? 'text-green-600' : 'text-red-600'}`} />
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>${fmt(net)}</p>
+            <p className={`text-2xl font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{money(net)}</p>
             <p className="text-xs text-muted-foreground">Income minus expense</p>
           </CardContent>
         </Card>
@@ -198,7 +199,7 @@ export default function TransactionFlowPage() {
                     <TableCell className="text-muted-foreground">{t.categoryAccount?.name ?? '—'}</TableCell>
                     <TableCell className="text-right font-semibold">
                       <span className={t.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
-                        {t.type === 'INCOME' ? '+' : '-'}${fmt(t.amount)}
+                        {t.type === 'INCOME' ? '+' : '-'}{money(t.amount)}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-sm">{t.reference}</TableCell>

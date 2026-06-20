@@ -1,10 +1,12 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { financeService } from '@/lib/services/finance'
 import type { GlAccount, FinanceOverview } from '@/lib/services/finance'
 import { DollarSign, TrendingUp, TrendingDown, Wallet, ArrowRight, PieChart, Loader2 } from 'lucide-react'
@@ -20,17 +22,24 @@ export default function FinanceOverviewPage() {
   const [overview, setOverview] = useState<FinanceOverview | null>(null)
   const [accounts, setAccounts] = useState<GlAccount[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     const load = async () => {
       setIsLoading(true)
-      const [ov, accs] = await Promise.all([
-        financeService.getOverview(),
-        financeService.getGLAccounts(),
-      ])
-      setOverview(ov)
-      setAccounts(accs)
-      setIsLoading(false)
+      setLoadError('')
+      try {
+        const [ov, accs] = await Promise.all([
+          financeService.getOverview(),
+          financeService.getGLAccounts(),
+        ])
+        setOverview(ov)
+        setAccounts(accs)
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+      } finally {
+        setIsLoading(false)
+      }
     }
     load()
   }, [user?.tenantId])
@@ -59,12 +68,18 @@ export default function FinanceOverviewPage() {
     <div className="space-y-6">
       <PageHeader title="Finance Overview" description="Financial summary and reports" />
 
+      {loadError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Income" value={`$${fmt(totalIncome)}`} description="Revenue collected" icon={TrendingUp} />
-        <StatCard title="Total Expenses" value={`$${fmt(totalExpense)}`} description="Money spent" icon={TrendingDown} />
-        <StatCard title="Net Balance" value={`$${fmt(netBalance)}`} description={netBalance >= 0 ? 'Surplus' : 'Deficit'} icon={Wallet} />
-        <StatCard title="Cash Balance" value={`$${fmt(cashBalance)}`} description="Available cash" icon={DollarSign} />
+        <StatCard title="Total Income" value={`${money(totalIncome)}`} description="Revenue collected" icon={TrendingUp} />
+        <StatCard title="Total Expenses" value={`${money(totalExpense)}`} description="Money spent" icon={TrendingDown} />
+        <StatCard title="Net Balance" value={`${money(netBalance)}`} description={netBalance >= 0 ? 'Surplus' : 'Deficit'} icon={Wallet} />
+        <StatCard title="Cash Balance" value={`${money(cashBalance)}`} description="Available cash" icon={DollarSign} />
       </div>
 
       {/* Quick Links */}
@@ -102,7 +117,7 @@ export default function FinanceOverviewPage() {
               {assetAccounts.map(a => (
                 <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border">
                   <div><p className="font-medium">{a.name}</p><p className="text-xs text-muted-foreground">{a.code}</p></div>
-                  <span className="font-bold text-green-600">${fmt(a.balance)}</span>
+                  <span className="font-bold text-green-600">{money(a.balance)}</span>
                 </div>
               ))}
             </div>
@@ -117,20 +132,20 @@ export default function FinanceOverviewPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <div className="flex justify-between mb-1 text-sm"><span>Income</span><span className="text-green-600">${fmt(totalIncome)}</span></div>
+              <div className="flex justify-between mb-1 text-sm"><span>Income</span><span className="text-green-600">{money(totalIncome)}</span></div>
               <div className="h-3 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-green-500 rounded-full" style={{ width: `${(totalIncome / totalForBar) * 100}%` }} />
               </div>
             </div>
             <div>
-              <div className="flex justify-between mb-1 text-sm"><span>Expenses</span><span className="text-red-600">${fmt(totalExpense)}</span></div>
+              <div className="flex justify-between mb-1 text-sm"><span>Expenses</span><span className="text-red-600">{money(totalExpense)}</span></div>
               <div className="h-3 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-red-500 rounded-full" style={{ width: `${(totalExpense / totalForBar) * 100}%` }} />
               </div>
             </div>
             <div className="pt-3 border-t flex justify-between font-medium">
               <span>Net Balance</span>
-              <span className={netBalance >= 0 ? 'text-green-600' : 'text-red-600'}>${fmt(netBalance)}</span>
+              <span className={netBalance >= 0 ? 'text-green-600' : 'text-red-600'}>{money(netBalance)}</span>
             </div>
           </CardContent>
         </Card>
@@ -144,7 +159,7 @@ export default function FinanceOverviewPage() {
               {incomeAccounts.map(a => (
                 <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border">
                   <div><p className="font-medium">{a.name}</p><p className="text-xs text-muted-foreground">{a.code}</p></div>
-                  <span className="font-bold text-blue-600">${fmt(a.balance)}</span>
+                  <span className="font-bold text-blue-600">{money(a.balance)}</span>
                 </div>
               ))}
             </div>
@@ -160,7 +175,7 @@ export default function FinanceOverviewPage() {
               {expenseAccounts.map(a => (
                 <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border">
                   <div><p className="font-medium">{a.name}</p><p className="text-xs text-muted-foreground">{a.code}</p></div>
-                  <span className="font-bold text-orange-600">${fmt(a.balance)}</span>
+                  <span className="font-bold text-orange-600">{money(a.balance)}</span>
                 </div>
               ))}
             </div>

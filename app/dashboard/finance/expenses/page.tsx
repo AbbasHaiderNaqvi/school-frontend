@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
 import type { FinanceTransaction, TransactionStatus, GlAccount } from '@/lib/services/finance'
@@ -41,10 +43,12 @@ function statusBadge(status: TransactionStatus) {
 }
 
 export default function ExpensesPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
   const [expenses, setExpenses] = useState<FinanceTransaction[]>([])
   const [glAccounts, setGlAccounts] = useState<GlAccount[]>([])
+  const [assetAccounts, setAssetAccounts] = useState<GlAccount[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
 
@@ -55,24 +59,34 @@ export default function ExpensesPage() {
     description: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
+    reference: '',
     categoryAccountId: '',
+    paymentAccountId: '',
     notes: '',
   })
 
-  const canApprove = user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'accountant'
-
   const loadData = useCallback(async () => {
     setIsLoading(true)
-    const [txns, accts] = await Promise.all([
-      financeService.getTransactions({ type: 'EXPENSE', limit: 100 }),
-      financeService.getGLAccounts({ type: 'EXPENSE' }),
-    ])
-    setExpenses(txns.data)
-    setGlAccounts(accts)
-    setIsLoading(false)
+    setLoadError('')
+    try {
+      const [txns, expAccts, assetAccts] = await Promise.all([
+        financeService.getTransactions({ type: 'EXPENSE', limit: 100 }),
+        financeService.getGLAccounts({ type: 'EXPENSE' }),
+        financeService.getGLAccounts({ type: 'ASSET' }),
+      ])
+      setExpenses(txns.data)
+      setGlAccounts(expAccts)
+      setAssetAccounts(assetAccts)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+
+  if (!can('finance.transaction.read')) return <AccessDenied />
 
   const handleCreate = async () => {
     if (!newExpense.description || !newExpense.amount) return
@@ -83,14 +97,16 @@ export default function ExpensesPage() {
       amount: newExpense.amount,
       description: newExpense.description,
       date: newExpense.date,
-      categoryAccountId: newExpense.categoryAccountId || undefined,
+      reference: newExpense.reference || undefined,
+      categoryAccountId: newExpense.categoryAccountId && newExpense.categoryAccountId !== 'none' ? newExpense.categoryAccountId : undefined,
+      paymentAccountId: newExpense.paymentAccountId && newExpense.paymentAccountId !== 'none' ? newExpense.paymentAccountId : undefined,
     })
     if (result.error || !result.transaction) {
       setCreateError(result.error || 'Failed to create expense')
       setIsSubmitting(false)
       return
     }
-    setNewExpense({ description: '', amount: '', date: new Date().toISOString().split('T')[0], categoryAccountId: '', notes: '' })
+    setNewExpense({ description: '', amount: '', date: new Date().toISOString().split('T')[0], reference: '', categoryAccountId: '', paymentAccountId: '', notes: '' })
     setIsCreateOpen(false)
     setIsSubmitting(false)
     loadData()
@@ -129,9 +145,11 @@ export default function ExpensesPage() {
             <Button variant="outline" onClick={loadData} disabled={isLoading}>
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
             </Button>
-            <Button onClick={() => { setCreateError(''); setIsCreateOpen(true) }}>
-              <Plus className="h-4 w-4 mr-2" /> New Expense
-            </Button>
+            {can('finance.transaction.create') && (
+              <Button onClick={() => { setCreateError(''); setIsCreateOpen(true) }}>
+                <Plus className="h-4 w-4 mr-2" /> New Expense
+              </Button>
+            )}
           </div>
         }
       />
@@ -141,7 +159,7 @@ export default function ExpensesPage() {
           <CardContent className="flex items-center justify-between pt-6">
             <div>
               <p className="text-sm text-muted-foreground">Total Expenses</p>
-              <p className="text-2xl font-bold">${fmt(totalAmount)}</p>
+              <p className="text-2xl font-bold">{money(totalAmount)}</p>
             </div>
             <div className="p-3 rounded-lg bg-primary/10"><DollarSign className="h-6 w-6 text-primary" /></div>
           </CardContent>
@@ -193,6 +211,11 @@ export default function ExpensesPage() {
           <CardDescription>{filtered.length} expenses found</CardDescription>
         </CardHeader>
         <CardContent>
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
           {isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : (
@@ -214,11 +237,11 @@ export default function ExpensesPage() {
                     <TableCell className="font-mono text-sm">{exp.reference}</TableCell>
                     <TableCell className="font-medium">{exp.description}</TableCell>
                     <TableCell>{exp.categoryAccount?.name ?? '—'}</TableCell>
-                    <TableCell className="text-right font-semibold">${fmt(exp.amount)}</TableCell>
+                    <TableCell className="text-right font-semibold">{money(exp.amount)}</TableCell>
                     <TableCell className="text-muted-foreground">{exp.date}</TableCell>
                     <TableCell>{statusBadge(exp.status)}</TableCell>
                     <TableCell>
-                      {canApprove && exp.status === 'PENDING_APPROVAL' && (
+                      {can('finance.transaction.approve') && exp.status === 'PENDING_APPROVAL' && (
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" className="text-green-600 h-7 px-2" onClick={() => handleApprove(exp)}>
                             <CheckCircle className="h-3 w-3" />
@@ -265,13 +288,30 @@ export default function ExpensesPage() {
               </div>
             </div>
             <div>
-              <Label>Category Account (optional)</Label>
-              <Select value={newExpense.categoryAccountId} onValueChange={v => setNewExpense(f => ({ ...f, categoryAccountId: v }))}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select an expense account" /></SelectTrigger>
-                <SelectContent>
-                  {glAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Reference No. (optional)</Label>
+              <Input value={newExpense.reference} onChange={e => setNewExpense(f => ({ ...f, reference: e.target.value }))} placeholder="e.g. INV-1001" className="mt-1" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Category Account (optional)</Label>
+                <Select value={newExpense.categoryAccountId} onValueChange={v => setNewExpense(f => ({ ...f, categoryAccountId: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Expense account" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {glAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Payment Account (optional)</Label>
+                <Select value={newExpense.paymentAccountId} onValueChange={v => setNewExpense(f => ({ ...f, paymentAccountId: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Cash / bank account" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {assetAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>

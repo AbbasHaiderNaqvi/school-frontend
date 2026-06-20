@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
@@ -18,6 +19,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { feeService } from '@/lib/services/fee'
 import type { FeeInvoice, InvoiceStatus, PaymentMethod } from '@/lib/services/fee'
 import { Search, CreditCard, Loader2 } from 'lucide-react'
@@ -35,10 +37,11 @@ function statusVariant(status: InvoiceStatus): 'default' | 'secondary' | 'destru
 }
 
 export default function InvoicesPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
   const [invoices, setInvoices] = useState<FeeInvoice[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
 
@@ -53,13 +56,19 @@ export default function InvoicesPage() {
 
   const loadInvoices = useCallback(async () => {
     setIsLoading(true)
-    const result = await feeService.getInvoices({
-      limit: 100,
-      status: filterStatus !== 'all' ? (filterStatus as InvoiceStatus) : undefined,
-    })
-    setInvoices(result.data)
-    setTotal(result.total)
-    setIsLoading(false)
+    setLoadError('')
+    try {
+      const result = await feeService.getInvoices({
+        limit: 100,
+        status: filterStatus !== 'all' ? (filterStatus as InvoiceStatus) : undefined,
+      })
+      setInvoices(result.data)
+      setTotal(result.total)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [filterStatus])
 
   useEffect(() => { loadInvoices() }, [loadInvoices])
@@ -103,6 +112,8 @@ export default function InvoicesPage() {
       i.invoiceNo.toLowerCase().includes(q)
   })
 
+  if (!can('fees.invoice.read')) return <AccessDenied />
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -137,6 +148,11 @@ export default function InvoicesPage() {
       <Card>
         <CardHeader><CardTitle>Invoices ({total})</CardTitle></CardHeader>
         <CardContent>
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
@@ -158,14 +174,14 @@ export default function InvoicesPage() {
                   <TableCell className="font-medium">{invoice.studentName ?? '—'}</TableCell>
                   <TableCell>{invoice.className ?? '—'}</TableCell>
                   <TableCell>{invoice.dueDate}</TableCell>
-                  <TableCell className="text-right">${fmt(invoice.totalAmount)}</TableCell>
-                  <TableCell className="text-right text-green-600">${fmt(invoice.paidAmount)}</TableCell>
+                  <TableCell className="text-right">{money(invoice.totalAmount)}</TableCell>
+                  <TableCell className="text-right text-green-600">{money(invoice.paidAmount)}</TableCell>
                   <TableCell className={`text-right ${parseFloat(invoice.balanceAmount) > 0 ? 'text-red-600' : ''}`}>
-                    ${fmt(invoice.balanceAmount)}
+                    {money(invoice.balanceAmount)}
                   </TableCell>
                   <TableCell><Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge></TableCell>
                   <TableCell>
-                    {(invoice.status === 'ISSUED' || invoice.status === 'PARTIAL' || invoice.status === 'OVERDUE') && (
+                    {can('fees.payment.create') && (invoice.status === 'ISSUED' || invoice.status === 'PARTIAL' || invoice.status === 'OVERDUE') && (
                       <Button variant="outline" size="sm" onClick={() => openPaymentDialog(invoice)}>
                         <CreditCard className="h-4 w-4 mr-1" /> Pay
                       </Button>
@@ -195,10 +211,10 @@ export default function InvoicesPage() {
           {selectedInvoice && (
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg text-sm">
-                <div><p className="text-muted-foreground">Total</p><p className="font-bold">${fmt(selectedInvoice.totalAmount)}</p></div>
-                <div><p className="text-muted-foreground">Paid</p><p className="font-bold text-green-600">${fmt(selectedInvoice.paidAmount)}</p></div>
-                <div><p className="text-muted-foreground">Discount</p><p className="font-bold">${fmt(selectedInvoice.discountAmount)}</p></div>
-                <div><p className="text-muted-foreground">Balance</p><p className="font-bold text-red-600">${fmt(selectedInvoice.balanceAmount)}</p></div>
+                <div><p className="text-muted-foreground">Total</p><p className="font-bold">{money(selectedInvoice.totalAmount)}</p></div>
+                <div><p className="text-muted-foreground">Paid</p><p className="font-bold text-green-600">{money(selectedInvoice.paidAmount)}</p></div>
+                <div><p className="text-muted-foreground">Discount</p><p className="font-bold">{money(selectedInvoice.discountAmount)}</p></div>
+                <div><p className="text-muted-foreground">Balance</p><p className="font-bold text-red-600">{money(selectedInvoice.balanceAmount)}</p></div>
               </div>
               <div>
                 <Label>Payment Amount</Label>

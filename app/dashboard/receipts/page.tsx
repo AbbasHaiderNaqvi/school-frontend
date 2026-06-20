@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState, useCallback } from 'react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { feeService } from '@/lib/services/fee'
 import type { FeeReceipt, ReceiptPrintData } from '@/lib/services/fee'
 import { Download, Eye, Search, Loader2, FileText } from 'lucide-react'
@@ -23,7 +25,7 @@ function fmt(val: string | number | undefined): string {
 
 function buildReceiptHTML(data: ReceiptPrintData): string {
   const lines = data.lines.map(l =>
-    `<tr><td style="padding:4px 8px">${l.componentName}</td><td style="padding:4px 8px;text-align:right">$${fmt(l.amount)}</td></tr>`
+    `<tr><td style="padding:4px 8px">${l.componentName}</td><td style="padding:4px 8px;text-align:right">${money(l.amount)}</td></tr>`
   ).join('')
 
   return `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:24px;border:1px solid #ddd;border-radius:8px">
@@ -47,7 +49,7 @@ function buildReceiptHTML(data: ReceiptPrintData): string {
       <tr><td style="padding:4px 8px;font-weight:bold">Payment Method</td><td style="padding:4px 8px">${data.payment.method}</td></tr>
       ${data.payment.referenceNo ? `<tr><td style="padding:4px 8px;font-weight:bold">Reference</td><td style="padding:4px 8px">${data.payment.referenceNo}</td></tr>` : ''}
       <tr><td style="padding:4px 8px;font-weight:bold">Payment Date</td><td style="padding:4px 8px">${data.payment.paymentDate}</td></tr>
-      <tr style="border-top:2px solid #ccc"><td style="padding:8px;font-size:18px;font-weight:bold">Amount Paid</td><td style="padding:8px;font-size:18px;font-weight:bold;text-align:right">$${fmt(data.payment.amount)}</td></tr>
+      <tr style="border-top:2px solid #ccc"><td style="padding:8px;font-size:18px;font-weight:bold">Amount Paid</td><td style="padding:8px;font-size:18px;font-weight:bold;text-align:right">${money(data.payment.amount)}</td></tr>
     </table>
     <p style="text-align:center;font-size:11px;color:#999;margin-top:24px">Computer-generated receipt • Valid without signature<br>Issued: ${data.issuedAt}</p>
   </body></html>`
@@ -56,6 +58,7 @@ function buildReceiptHTML(data: ReceiptPrintData): string {
 export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<FeeReceipt[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [printData, setPrintData] = useState<ReceiptPrintData | null>(null)
   const [isPrintLoading, setIsPrintLoading] = useState(false)
@@ -63,9 +66,15 @@ export default function ReceiptsPage() {
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
-    const result = await feeService.getReceipts({ limit: 200 })
-    setReceipts(result.data)
-    setIsLoading(false)
+    setLoadError('')
+    try {
+      const result = await feeService.getReceipts({ limit: 200 })
+      setReceipts(result.data)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
@@ -117,7 +126,7 @@ export default function ReceiptsPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Total Collected</p>
-            <p className="text-2xl font-bold text-green-600">${fmt(totalAmount)}</p>
+            <p className="text-2xl font-bold text-green-600">{money(totalAmount)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -134,6 +143,11 @@ export default function ReceiptsPage() {
           <CardDescription>All fee payment receipts</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -170,7 +184,7 @@ export default function ReceiptsPage() {
                     <TableRow key={r.id}>
                       <TableCell className="font-mono font-semibold">{r.receiptNo}</TableCell>
                       <TableCell className="font-mono text-sm">{r.invoiceNo}</TableCell>
-                      <TableCell className="text-right font-semibold">${fmt(r.amount)}</TableCell>
+                      <TableCell className="text-right font-semibold">{money(r.amount)}</TableCell>
                       <TableCell className="text-sm">{new Date(r.issuedAt).toLocaleDateString()}</TableCell>
                       <TableCell>
                         {r.isVoided
@@ -236,7 +250,7 @@ export default function ReceiptsPage() {
                       {printData.lines.map((l, i) => (
                         <TableRow key={i}>
                           <TableCell>{l.componentName}</TableCell>
-                          <TableCell className="text-right">${fmt(l.amount)}</TableCell>
+                          <TableCell className="text-right">{money(l.amount)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -247,7 +261,7 @@ export default function ReceiptsPage() {
                   {printData.payment.referenceNo && <div className="flex justify-between"><span className="font-medium">Reference:</span><span>{printData.payment.referenceNo}</span></div>}
                   <div className="flex justify-between"><span className="font-medium">Date:</span><span>{printData.payment.paymentDate}</span></div>
                   <div className="flex justify-between border-t pt-2 text-base font-bold">
-                    <span>Amount Paid:</span><span>${fmt(printData.payment.amount)}</span>
+                    <span>Amount Paid:</span><span>{money(printData.payment.amount)}</span>
                   </div>
                 </div>
                 <p className="text-center text-xs text-muted-foreground">Computer-generated receipt • Valid without signature</p>

@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
@@ -14,6 +15,7 @@ import {
   ArrowRight, FileText, CreditCard, Users, Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -33,19 +35,26 @@ export default function FeeOverviewPage() {
   const [invoices, setInvoices] = useState<FeeInvoice[]>([])
   const [structures, setStructures] = useState<FeeStructure[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
-      const [sum, inv, str] = await Promise.all([
-        feeService.getDashboardSummary(),
-        feeService.getInvoices({ limit: 5 }),
-        feeService.getStructures({ limit: 5 }),
-      ])
-      setSummary(sum)
-      setInvoices(inv.data)
-      setStructures(str.data)
-      setIsLoading(false)
+      setLoadError('')
+      try {
+        const [sum, inv, str] = await Promise.all([
+          feeService.getDashboardSummary(),
+          feeService.getInvoices({ limit: 5 }),
+          feeService.getStructures({ limit: 5 }),
+        ])
+        setSummary(sum)
+        setInvoices(inv.data)
+        setStructures(str.data)
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+      } finally {
+        setIsLoading(false)
+      }
     }
     loadData()
   }, [user?.tenantId])
@@ -69,11 +78,17 @@ export default function FeeOverviewPage() {
     <div className="space-y-6">
       <PageHeader title="Fee Management" description="Manage student fees and payments" />
 
+      {loadError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Invoiced" value={`$${fmt(totalInvoiced)}`} description="Total billed" icon={Receipt} />
-        <StatCard title="Total Collected" value={`$${fmt(totalCollected)}`} description="Payments received" icon={DollarSign} />
-        <StatCard title="Outstanding" value={`$${fmt(totalOutstanding)}`} description="Pending collection" icon={AlertTriangle} />
+        <StatCard title="Total Invoiced" value={`${money(totalInvoiced)}`} description="Total billed" icon={Receipt} />
+        <StatCard title="Total Collected" value={`${money(totalCollected)}`} description="Payments received" icon={DollarSign} />
+        <StatCard title="Outstanding" value={`${money(totalOutstanding)}`} description="Pending collection" icon={AlertTriangle} />
         <StatCard title="Collection Rate" value={`${parseFloat(collectionRate).toFixed(1)}%`} description="Of total invoiced" icon={CheckCircle} />
       </div>
 
@@ -108,7 +123,7 @@ export default function FeeOverviewPage() {
             </div>
             <div className="flex-1">
               <p className="font-medium text-foreground">Overdue Fees</p>
-              <p className="text-sm text-muted-foreground">Total overdue: ${fmt(totalOverdue)}</p>
+              <p className="text-sm text-muted-foreground">Total overdue: {money(totalOverdue)}</p>
             </div>
             <Link href="/dashboard/fees/invoices?status=OVERDUE">
               <Button variant="destructive">View Overdue</Button>
@@ -139,7 +154,7 @@ export default function FeeOverviewPage() {
                     <p className="text-sm text-muted-foreground">{invoice.className} — Due {invoice.dueDate}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-foreground">${fmt(invoice.totalAmount)}</p>
+                    <p className="font-medium text-foreground">{money(invoice.totalAmount)}</p>
                     <Badge variant={statusVariant(invoice.status)} className="mt-1">{invoice.status}</Badge>
                   </div>
                 </div>
@@ -168,7 +183,7 @@ export default function FeeOverviewPage() {
                     <p className="font-medium text-foreground">{s.name}</p>
                     <p className="text-sm text-muted-foreground">{s.academicYear} — {s.componentCount ?? 0} components</p>
                   </div>
-                  <span className="font-bold text-foreground">${fmt(s.totalAmount)}</span>
+                  <span className="font-bold text-foreground">{money(s.totalAmount)}</span>
                 </div>
               ))}
             </div>

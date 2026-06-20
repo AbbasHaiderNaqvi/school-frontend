@@ -1,4 +1,12 @@
-import { api } from './api-client'
+import { api, toPaginated } from './api-client'
+
+function toArray<T>(raw: unknown): T[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw as T[]
+  const p = raw as Record<string, unknown>
+  if (Array.isArray(p.data)) return p.data as T[]
+  return []
+}
 
 export type FeeComponentType =
   | 'TUITION' | 'ADMISSION' | 'EXAM' | 'TRANSPORT'
@@ -225,8 +233,9 @@ function buildQS(params: Record<string, unknown>): string {
 export const feeService = {
   // ── Fee Components ──────────────────────────────────────────────────────────
   async getComponents(params: { page?: number; limit?: number; search?: string; isActive?: boolean } = {}): Promise<Paginated<FeeComponent>> {
-    const { data } = await api.get<Paginated<FeeComponent>>(`/fees/components${buildQS(params)}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<FeeComponent>>(`/fees/components${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async createComponent(payload: { name: string; defaultAmount: string; description?: string; componentType?: FeeComponentType; glAccountId?: string }): Promise<{ component: FeeComponent | null; error?: string }> {
@@ -247,8 +256,9 @@ export const feeService = {
 
   // ── Fee Structures ───────────────────────────────────────────────────────────
   async getStructures(params: { page?: number; limit?: number; classId?: string; academicYear?: string; status?: FeeStructureStatus; search?: string } = {}): Promise<Paginated<FeeStructure>> {
-    const { data } = await api.get<Paginated<FeeStructure>>(`/fees/structures${buildQS(params)}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<FeeStructure>>(`/fees/structures${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async getStructureById(id: string): Promise<FeeStructure | null> {
@@ -301,8 +311,9 @@ export const feeService = {
 
   // ── Invoices ─────────────────────────────────────────────────────────────────
   async getInvoices(params: { page?: number; limit?: number; studentId?: string; classId?: string; academicYear?: string; month?: string; status?: InvoiceStatus; from?: string; to?: string; search?: string } = {}): Promise<Paginated<FeeInvoice>> {
-    const { data } = await api.get<Paginated<FeeInvoice>>(`/fees/invoices${buildQS(params)}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<FeeInvoice>>(`/fees/invoices${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async getInvoiceById(id: string): Promise<FeeInvoice | null> {
@@ -345,8 +356,9 @@ export const feeService = {
 
   // ── Payments ─────────────────────────────────────────────────────────────────
   async getPayments(params: { page?: number; limit?: number; studentId?: string; invoiceId?: string; paymentMethod?: PaymentMethod; status?: PaymentStatus; from?: string; to?: string } = {}): Promise<Paginated<FeePayment>> {
-    const { data } = await api.get<Paginated<FeePayment>>(`/fees/payments${buildQS(params)}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<FeePayment>>(`/fees/payments${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async getPaymentById(id: string): Promise<FeePayment | null> {
@@ -374,8 +386,9 @@ export const feeService = {
 
   // ── Receipts ─────────────────────────────────────────────────────────────────
   async getReceipts(params: { page?: number; limit?: number; studentId?: string; invoiceId?: string; paymentId?: string; isVoided?: boolean } = {}): Promise<Paginated<FeeReceipt>> {
-    const { data } = await api.get<Paginated<FeeReceipt>>(`/fees/receipts${buildQS(params)}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<FeeReceipt>>(`/fees/receipts${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async getReceiptById(id: string): Promise<FeeReceipt | null> {
@@ -396,8 +409,9 @@ export const feeService = {
 
   // ── Discounts ────────────────────────────────────────────────────────────────
   async getDiscounts(params: { page?: number; limit?: number; studentId?: string; academicYear?: string; type?: DiscountType; status?: DiscountStatus } = {}): Promise<Paginated<FeeDiscount>> {
-    const { data } = await api.get<Paginated<FeeDiscount>>(`/fees/discounts${buildQS(params)}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<FeeDiscount>>(`/fees/discounts${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async createDiscount(payload: { studentId: string; invoiceId?: string; academicYear: string; type: DiscountType; discountMode: DiscountMode; value: string; reason: string }): Promise<{ discount: FeeDiscount | null; error?: string }> {
@@ -425,8 +439,9 @@ export const feeService = {
 
   // ── Overdue ──────────────────────────────────────────────────────────────────
   async getOverdueInvoices(params: { page?: number; limit?: number; classId?: string; academicYear?: string } = {}): Promise<Paginated<FeeInvoice>> {
-    const { data } = await api.get<Paginated<FeeInvoice>>(`/fees/overdue${buildQS(params)}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<FeeInvoice>>(`/fees/overdue${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async getDefaulters(params: { classId?: string; academicYear?: string } = {}): Promise<unknown> {
@@ -446,29 +461,34 @@ export const feeService = {
 
   // ── Student Fee Detail ────────────────────────────────────────────────────────
   async getStudentFees(params: { page?: number; limit?: number; classId?: string; academicYear?: string; status?: string } = {}): Promise<Paginated<StudentFeeAssignment>> {
-    const { data } = await api.get<Paginated<StudentFeeAssignment>>(`/fees/student-fees${buildQS(params)}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<StudentFeeAssignment>>(`/fees/student-fees${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async getStudentFeeDetail(studentId: string): Promise<StudentFeeDetail | null> {
-    const { data } = await api.get<StudentFeeDetail>(`/fees/student-fees/${studentId}/detail`)
+    const { data, error } = await api.get<StudentFeeDetail>(`/fees/student-fees/${studentId}/detail`)
+    if (error) throw new Error(error)
     return data || null
   },
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
   async getDashboardSummary(): Promise<FeeDashboardSummary | null> {
-    const { data } = await api.get<FeeDashboardSummary>('/fees/dashboard/summary')
+    const { data, error } = await api.get<FeeDashboardSummary>('/fees/dashboard/summary')
+    if (error) throw new Error(error)
     return data || null
   },
 
   async getCollectionChart(params: { groupBy?: 'month' | 'week' | 'day'; from?: string; to?: string } = {}): Promise<Array<{ period: string; collected: string; invoiced: string }>> {
-    const { data } = await api.get<Array<{ period: string; collected: string; invoiced: string }>>(`/fees/dashboard/collection-chart${buildQS(params)}`)
-    return data || []
+    const { data, error } = await api.get<unknown>(`/fees/dashboard/collection-chart${buildQS(params)}`)
+    if (error) throw new Error(error)
+    return toArray<{ period: string; collected: string; invoiced: string }>(data)
   },
 
   async getClassWiseSummary(): Promise<Array<{ classId: string; className: string; totalInvoiced: string; totalCollected: string; outstanding: string; studentCount: number }>> {
-    const { data } = await api.get<Array<{ classId: string; className: string; totalInvoiced: string; totalCollected: string; outstanding: string; studentCount: number }>>('/fees/dashboard/class-wise-summary')
-    return data || []
+    const { data, error } = await api.get<unknown>('/fees/dashboard/class-wise-summary')
+    if (error) throw new Error(error)
+    return toArray<{ classId: string; className: string; totalInvoiced: string; totalCollected: string; outstanding: string; studentCount: number }>(data)
   },
 
   async getOverdueSummary(): Promise<unknown> {
@@ -547,6 +567,6 @@ export const feeService = {
   // ── Audit Logs ────────────────────────────────────────────────────────────────
   async getAuditLogs(params: { page?: number; limit?: number; action?: string; studentId?: string; invoiceId?: string; from?: string; to?: string } = {}): Promise<Paginated<{ id: string; action: string; actorUserId: string; entityId?: string; studentId?: string; invoiceId?: string; metadata?: Record<string, unknown>; createdAt: string }>> {
     const { data } = await api.get(`/fees/audit-logs${buildQS(params)}`)
-    return (data as Paginated<{ id: string; action: string; actorUserId: string; entityId?: string; studentId?: string; invoiceId?: string; metadata?: Record<string, unknown>; createdAt: string }>) || { data: [], total: 0, page: 1, limit: 20 }
+    return toPaginated(data)
   },
 }

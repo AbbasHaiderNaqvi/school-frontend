@@ -41,6 +41,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
 import {
   UserPlus, Edit, Trash2, Search, MoreHorizontal,
   Lock, CheckCircle, XCircle, Loader2, Copy, RefreshCw,
@@ -48,26 +49,31 @@ import {
 
 const ROLE_OPTIONS: Array<{ value: ApiUserRole; label: string }> = [
   { value: 'tenant_owner', label: 'Tenant Owner' },
-  { value: 'admin', label: 'Admin' },
+  { value: 'tenant_admin', label: 'Admin' },
+  { value: 'tenant_principal', label: 'Principal' },
+  { value: 'tenant_accountant', label: 'Accountant' },
+  { value: 'tenant_cashier', label: 'Cashier' },
   { value: 'teacher', label: 'Teacher' },
-  { value: 'accountant', label: 'Accountant' },
-  { value: 'receptionist', label: 'Receptionist' },
+  { value: 'hr', label: 'HR' },
   { value: 'student', label: 'Student' },
   { value: 'parent', label: 'Parent' },
 ]
 
 const ROLE_COLORS: Record<string, string> = {
+  super_admin: 'bg-red-100 text-red-800',
   tenant_owner: 'bg-purple-100 text-purple-800',
-  admin: 'bg-blue-100 text-blue-800',
+  tenant_admin: 'bg-blue-100 text-blue-800',
+  tenant_principal: 'bg-indigo-100 text-indigo-800',
+  tenant_accountant: 'bg-yellow-100 text-yellow-800',
+  tenant_cashier: 'bg-cyan-100 text-cyan-800',
   teacher: 'bg-green-100 text-green-800',
-  accountant: 'bg-yellow-100 text-yellow-800',
-  receptionist: 'bg-cyan-100 text-cyan-800',
+  hr: 'bg-orange-100 text-orange-800',
   student: 'bg-gray-100 text-gray-800',
   parent: 'bg-pink-100 text-pink-800',
 }
 
 export default function UserManagementPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
   const [users, setUsers] = useState<UserListItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -84,7 +90,10 @@ export default function UserManagementPage() {
   const [setupUrl, setSetupUrl] = useState('')
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
 
-  const [addForm, setAddForm] = useState({ fullName: '', email: '', role: 'teacher' as ApiUserRole, phone: '' })
+  const [addForm, setAddForm] = useState({
+    fullName: '', email: '', role: 'teacher' as ApiUserRole, phone: '',
+    employeeId: '', studentId: '', parentId: '',
+  })
   const [editForm, setEditForm] = useState({ fullName: '', phone: '' })
 
   const loadUsers = useCallback(async () => {
@@ -104,17 +113,28 @@ export default function UserManagementPage() {
 
   useEffect(() => { loadUsers() }, [loadUsers])
 
+  if (!can('users.user.read')) return <AccessDenied />
+
   const handleCreate = async () => {
     setIsSubmitting(true)
     setSubmitError('')
-    const result = await usersService.create(addForm)
+    const payload = {
+      fullName: addForm.fullName,
+      email: addForm.email,
+      role: addForm.role,
+      phone: addForm.phone || undefined,
+      employeeId: addForm.employeeId || undefined,
+      studentId: addForm.studentId || undefined,
+      parentId: addForm.parentId || undefined,
+    }
+    const result = await usersService.create(payload)
     if (result.error || !result.user) {
       setSubmitError(result.error || 'Failed to create user')
       setIsSubmitting(false)
       return
     }
     setSetupUrl(result.setupUrl || '')
-    setAddForm({ fullName: '', email: '', role: 'teacher', phone: '' })
+    setAddForm({ fullName: '', email: '', role: 'teacher', phone: '', employeeId: '', studentId: '', parentId: '' })
     setIsSubmitting(false)
     loadUsers()
     if (!result.setupUrl) setIsAddOpen(false)
@@ -172,15 +192,17 @@ export default function UserManagementPage() {
         title="User Management"
         description="Manage users, roles, and account access"
         action={
-          <Button onClick={() => { setSetupUrl(''); setSubmitError(''); setIsAddOpen(true) }}>
-            <UserPlus className="mr-2 h-4 w-4" /> Invite User
-          </Button>
+          can('users.user.create') && (
+            <Button onClick={() => { setSetupUrl(''); setSubmitError(''); setIsAddOpen(true) }}>
+              <UserPlus className="mr-2 h-4 w-4" /> Invite User
+            </Button>
+          )
         }
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>Users ({total})</CardTitle>
+          <CardTitle>Users</CardTitle>
           <div className="flex flex-wrap gap-3 mt-4">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -254,25 +276,34 @@ export default function UserManagementPage() {
                           <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(u)}>
-                            <Edit className="mr-2 h-4 w-4" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleResetPassword(u)}>
-                            <Lock className="mr-2 h-4 w-4" /> Reset Password
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {u.isActive ? (
-                            <DropdownMenuItem onClick={() => handleDeactivate(u)} className="text-orange-600">
-                              <XCircle className="mr-2 h-4 w-4" /> Deactivate
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem onClick={() => handleReactivate(u)} className="text-green-600">
-                              <CheckCircle className="mr-2 h-4 w-4" /> Reactivate
+                          {can('users.user.update') && (
+                            <DropdownMenuItem onClick={() => openEdit(u)}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem onClick={() => handleDelete(u)} className="text-destructive">
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
+                          {can('users.user.reset_password') && (
+                            <DropdownMenuItem onClick={() => handleResetPassword(u)}>
+                              <Lock className="mr-2 h-4 w-4" /> Reset Password
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          {u.isActive
+                            ? can('users.user.deactivate') && (
+                                <DropdownMenuItem onClick={() => handleDeactivate(u)} className="text-orange-600">
+                                  <XCircle className="mr-2 h-4 w-4" /> Deactivate
+                                </DropdownMenuItem>
+                              )
+                            : can('users.user.reactivate') && (
+                                <DropdownMenuItem onClick={() => handleReactivate(u)} className="text-green-600">
+                                  <CheckCircle className="mr-2 h-4 w-4" /> Reactivate
+                                </DropdownMenuItem>
+                              )
+                          }
+                          {can('users.user.delete') && (
+                            <DropdownMenuItem onClick={() => handleDelete(u)} className="text-destructive">
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -321,26 +352,44 @@ export default function UserManagementPage() {
             <>
               {submitError && <Alert variant="destructive"><AlertDescription>{submitError}</AlertDescription></Alert>}
               <div className="space-y-4">
-                <div>
-                  <Label>Full Name</Label>
-                  <Input value={addForm.fullName} onChange={e => setAddForm(f => ({ ...f, fullName: e.target.value }))} placeholder="Jane Smith" />
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <Input type="email" value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@school.edu" />
-                </div>
-                <div>
-                  <Label>Phone (optional)</Label>
-                  <Input value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" />
-                </div>
-                <div>
-                  <Label>Role</Label>
-                  <Select value={addForm.role} onValueChange={v => setAddForm(f => ({ ...f, role: v as ApiUserRole }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Label>Full Name</Label>
+                    <Input value={addForm.fullName} onChange={e => setAddForm(f => ({ ...f, fullName: e.target.value }))} placeholder="Jane Smith" className="mt-1" />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Email</Label>
+                    <Input type="email" value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@school.edu" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>Phone (optional)</Label>
+                    <Input value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} placeholder="+92 300 0000000" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>Role</Label>
+                    <Select value={addForm.role} onValueChange={v => setAddForm(f => ({ ...f, role: v as ApiUserRole, employeeId: '', studentId: '', parentId: '' }))}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {addForm.role === 'student' ? (
+                    <div className="col-span-2">
+                      <Label>Student ID (optional)</Label>
+                      <Input value={addForm.studentId} onChange={e => setAddForm(f => ({ ...f, studentId: e.target.value }))} placeholder="STD-MDG-0001" className="mt-1" />
+                    </div>
+                  ) : addForm.role === 'parent' ? (
+                    <div className="col-span-2">
+                      <Label>Parent ID (optional)</Label>
+                      <Input value={addForm.parentId} onChange={e => setAddForm(f => ({ ...f, parentId: e.target.value }))} placeholder="PAR-MDG-0001" className="mt-1" />
+                    </div>
+                  ) : (
+                    <div className="col-span-2">
+                      <Label>Employee ID (optional)</Label>
+                      <Input value={addForm.employeeId} onChange={e => setAddForm(f => ({ ...f, employeeId: e.target.value }))} placeholder="EMP-MDG-0001" className="mt-1" />
+                    </div>
+                  )}
                 </div>
               </div>
               <DialogFooter>

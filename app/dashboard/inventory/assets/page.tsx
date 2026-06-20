@@ -1,5 +1,6 @@
 'use client'
 
+import { CURRENCY_SYMBOL } from '@/lib/currency'
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -209,7 +210,7 @@ export default function AssetsPage() {
                     <TableCell>{getStatusBadge(asset.status)}</TableCell>
                     <TableCell>{getConditionBadge(asset.condition)}</TableCell>
                     <TableCell>{asset.purchaseDate}</TableCell>
-                    <TableCell className="text-right">${asset.currentValue.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{CURRENCY_SYMBOL} {asset.currentValue.toFixed(2)}</TableCell>
                   </TableRow>
                 ))
               )}

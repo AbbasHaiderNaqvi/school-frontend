@@ -1,4 +1,12 @@
-import { api } from './api-client'
+import { api, toPaginated } from './api-client'
+
+function toArray<T>(raw: unknown): T[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw as T[]
+  const p = raw as Record<string, unknown>
+  if (Array.isArray(p.data)) return p.data as T[]
+  return []
+}
 
 export type GlAccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY'
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER'
@@ -41,10 +49,12 @@ export interface CreateTransactionRequest {
   amount: string
   description: string
   date: string
+  reference?: string
   categoryAccountId?: string
   paymentAccountId?: string
   fromAccountId?: string
   toAccountId?: string
+  transferMode?: 'VIA_MASTER' | 'DIRECT'
 }
 
 export interface FinanceOverview {
@@ -70,7 +80,8 @@ export interface PendingExpense {
 export interface Budget {
   id: string
   name: string
-  glAccountId: string
+  glAccountId?: string
+  glAccount?: { id: string; code: string; name: string }
   allocatedAmount: string
   startDate: string
   endDate: string
@@ -114,8 +125,9 @@ export const financeService = {
     if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
     if (params.search) query.set('search', params.search)
     const qs = query.toString()
-    const { data } = await api.get<GlAccount[]>(`/finance/gl-accounts${qs ? `?${qs}` : ''}`)
-    return data || []
+    const { data, error } = await api.get<unknown>(`/finance/gl-accounts${qs ? `?${qs}` : ''}`)
+    if (error) throw new Error(error)
+    return toArray<GlAccount>(data)
   },
 
   async createGLAccount(payload: CreateGlAccountRequest): Promise<{ account: GlAccount | null; error?: string }> {
@@ -145,8 +157,9 @@ export const financeService = {
     if (params.to) query.set('to', params.to)
     if (params.search) query.set('search', params.search)
     const qs = query.toString()
-    const { data } = await api.get<Paginated<FinanceTransaction>>(`/finance/transactions${qs ? `?${qs}` : ''}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    const { data, error } = await api.get<Paginated<FinanceTransaction>>(`/finance/transactions${qs ? `?${qs}` : ''}`)
+    if (error) throw new Error(error)
+    return toPaginated(data)
   },
 
   async createTransaction(payload: CreateTransactionRequest): Promise<{ transaction: FinanceTransaction | null; error?: string; status?: number }> {
@@ -157,8 +170,9 @@ export const financeService = {
 
   // Pending expense approvals
   async getPendingExpenses(): Promise<FinanceTransaction[]> {
-    const { data } = await api.get<FinanceTransaction[]>('/finance/expenses/pending')
-    return data || []
+    const { data, error } = await api.get<unknown>('/finance/expenses/pending')
+    if (error) throw new Error(error)
+    return toArray<FinanceTransaction>(data)
   },
 
   async approveExpense(id: string, notes?: string): Promise<boolean> {
@@ -173,7 +187,8 @@ export const financeService = {
 
   // Overview / dashboard
   async getOverview(): Promise<FinanceOverview | null> {
-    const { data } = await api.get<FinanceOverview>('/finance/overview')
+    const { data, error } = await api.get<FinanceOverview>('/finance/overview')
+    if (error) throw new Error(error)
     return data || null
   },
 
@@ -205,7 +220,8 @@ export const financeService = {
 
   // Expense approval threshold
   async getExpenseApproval(): Promise<ExpenseApprovalSettings | null> {
-    const { data } = await api.get<ExpenseApprovalSettings>('/finance/expense-approval')
+    const { data, error } = await api.get<ExpenseApprovalSettings>('/finance/expense-approval')
+    if (error) throw new Error(error)
     return data || null
   },
 
@@ -216,8 +232,9 @@ export const financeService = {
 
   // Budgets
   async getBudgets(): Promise<Budget[]> {
-    const { data } = await api.get<Budget[]>('/finance/budgets')
-    return data || []
+    const { data, error } = await api.get<unknown>('/finance/budgets')
+    if (error) throw new Error(error)
+    return toArray<Budget>(data)
   },
 
   async createBudget(payload: CreateBudgetRequest): Promise<{ budget: Budget | null; error?: string }> {

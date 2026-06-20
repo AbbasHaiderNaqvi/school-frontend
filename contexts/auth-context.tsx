@@ -9,8 +9,13 @@ interface AuthContextType {
   user: User | null
   tenant: ApiTenant | null
   features: Record<string, boolean>
+  permissions: string[]
   isLoading: boolean
   isAuthenticated: boolean
+  /** Returns true if the current user has the given permission string */
+  can: (permission: string) => boolean
+  /** Returns true if the user has ANY of the given permission strings */
+  canAny: (...perms: string[]) => boolean
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>
   logout: () => Promise<void>
   refreshUser: () => void
@@ -34,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [tenant, setTenant] = useState<ApiTenant | null>(null)
   const [features, setFeatures] = useState<Record<string, boolean>>(DEFAULT_FEATURES)
+  const [permissions, setPermissions] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const loadUser = useCallback(() => {
@@ -43,11 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session.user)
       setTenant(session.tenant ?? null)
       setFeatures(session.features ?? DEFAULT_FEATURES)
+      setPermissions(session.permissions ?? [])
     } else {
-      // Fallback: check current user without token (cleared state)
       setUser(null)
       setTenant(null)
       setFeatures(DEFAULT_FEATURES)
+      setPermissions([])
     }
 
     setIsLoading(false)
@@ -65,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(result.user)
       setTenant(result.tenant ?? null)
       setFeatures(result.features ?? DEFAULT_FEATURES)
+      setPermissions(result.permissions ?? [])
     }
 
     setIsLoading(false)
@@ -76,11 +84,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setTenant(null)
     setFeatures(DEFAULT_FEATURES)
+    setPermissions([])
   }
 
   const refreshUser = () => {
     loadUser()
   }
+
+  const can = (permission: string) => permissions.includes(permission)
+  const canAny = (...perms: string[]) => perms.some(p => permissions.includes(p))
 
   return (
     <AuthContext.Provider
@@ -88,8 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         tenant,
         features,
+        permissions,
         isLoading,
         isAuthenticated: !!user,
+        can,
+        canAny,
         login,
         logout,
         refreshUser,

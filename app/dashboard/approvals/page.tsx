@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useAuth } from '@/contexts/auth-context'
 import { useEffect, useState, useCallback } from 'react'
 import { financeService } from '@/lib/services/finance'
@@ -139,7 +140,7 @@ export default function ApprovalsPage() {
                         ? <Badge variant="outline">{exp.categoryAccount.name}</Badge>
                         : <span className="text-muted-foreground text-sm">—</span>}
                     </TableCell>
-                    <TableCell className="text-right font-semibold">${fmt(exp.amount)}</TableCell>
+                    <TableCell className="text-right font-semibold">{money(exp.amount)}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{exp.status.replace(/_/g, ' ')}</Badge>
                     </TableCell>
@@ -169,7 +170,7 @@ export default function ApprovalsPage() {
                 <div><p className="text-muted-foreground">Reference</p><p className="font-mono font-medium">{selected.reference}</p></div>
                 <div><p className="text-muted-foreground">Date</p><p className="font-medium">{selected.date}</p></div>
                 <div className="col-span-2"><p className="text-muted-foreground">Description</p><p className="font-medium">{selected.description}</p></div>
-                <div><p className="text-muted-foreground">Amount</p><p className="font-bold text-lg">${fmt(selected.amount)}</p></div>
+                <div><p className="text-muted-foreground">Amount</p><p className="font-bold text-lg">{money(selected.amount)}</p></div>
                 <div><p className="text-muted-foreground">Category</p><p className="font-medium">{selected.categoryAccount?.name ?? '—'}</p></div>
                 {selected.paymentAccount && (
                   <div><p className="text-muted-foreground">Payment Account</p><p className="font-medium">{selected.paymentAccount.name}</p></div>

@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -183,7 +184,7 @@ export default function FeeCounterPage() {
             {selectedStudent && (
               <CardDescription>
                 Code: {selectedStudent.userCode}
-                {totalBalance > 0 && ` · Total balance: $${fmt(totalBalance)}`}
+                {totalBalance > 0 && ` · Total balance: ${money(totalBalance)}`}
               </CardDescription>
             )}
           </CardHeader>
@@ -212,9 +213,9 @@ export default function FeeCounterPage() {
                     <TableRow key={inv.id}>
                       <TableCell className="font-mono text-sm font-semibold">{inv.invoiceNo}</TableCell>
                       <TableCell className="text-sm">{inv.dueDate}</TableCell>
-                      <TableCell className="text-right">${fmt(inv.netAmount)}</TableCell>
-                      <TableCell className="text-right text-green-600">${fmt(inv.paidAmount)}</TableCell>
-                      <TableCell className="text-right font-bold text-orange-600">${fmt(inv.balanceAmount)}</TableCell>
+                      <TableCell className="text-right">{money(inv.netAmount)}</TableCell>
+                      <TableCell className="text-right text-green-600">{money(inv.paidAmount)}</TableCell>
+                      <TableCell className="text-right font-bold text-orange-600">{money(inv.balanceAmount)}</TableCell>
                       <TableCell>
                         <Badge className={
                           inv.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
@@ -241,7 +242,7 @@ export default function FeeCounterPage() {
           <DialogHeader>
             <DialogTitle>Record Fee Payment</DialogTitle>
             <DialogDescription>
-              {selectedInvoice && `Invoice ${selectedInvoice.invoiceNo} — Balance: $${fmt(selectedInvoice.balanceAmount)}`}
+              {selectedInvoice && `Invoice ${selectedInvoice.invoiceNo} — Balance: ${money(selectedInvoice.balanceAmount)}`}
             </DialogDescription>
           </DialogHeader>
           {submitError && <Alert variant="destructive"><AlertDescription>{submitError}</AlertDescription></Alert>}

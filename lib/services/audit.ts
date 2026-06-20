@@ -1,4 +1,4 @@
-import { api } from './api-client'
+import { api, toPaginated } from './api-client'
 
 export interface AuditLog {
   id: string
@@ -41,7 +41,7 @@ export const auditService = {
     if (params.to) q.set('to', params.to)
     const qs = q.toString()
     const { data } = await api.get<Paginated<AuditLog>>(`/audit-logs${qs ? `?${qs}` : ''}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    return toPaginated(data)
   },
 
   async getFinanceLogs(params: ListAuditParams = {}): Promise<Paginated<AuditLog>> {
@@ -52,6 +52,6 @@ export const auditService = {
     if (params.to) q.set('to', params.to)
     const qs = q.toString()
     const { data } = await api.get<Paginated<AuditLog>>(`/audit-logs/finance${qs ? `?${qs}` : ''}`)
-    return data || { data: [], total: 0, page: 1, limit: 20 }
+    return toPaginated(data)
   },
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
@@ -7,109 +8,61 @@ import { StatCard } from '@/components/dashboard/stat-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { 
-  feeService, 
-  employeeService, 
-  taskService, 
-  attendanceService,
-  auditService 
-} from '@/lib/services'
 import { dashboardService } from '@/lib/services/dashboard'
-import type { Task, AuditLog } from '@/lib/types'
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
+import type { DashboardSummary } from '@/lib/services/dashboard'
+import { feeService } from '@/lib/services/fee'
+import type { FeeDashboardSummary } from '@/lib/services/fee'
+import { auditService } from '@/lib/services/audit'
+import type { AuditLog } from '@/lib/services/audit'
 import {
   Users,
   DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Zap,
+  ArrowRight,
   Clock,
   ListTodo,
-  Activity,
-  AlertTriangle,
-  TrendingUp,
-  ArrowRight,
 } from 'lucide-react'
 import Link from 'next/link'
 
+function fmt(val: string | number | undefined): string {
+  const n = parseFloat(String(val ?? 0))
+  return isNaN(n) ? '0.00' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 export function TenantAdminDashboard() {
   const { user, tenant } = useAuth()
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    income: 0,
-    expenses: 0,
-    netIncome: 0,
-    enabledFeatures: 0,
-    // local fallback stats
-    totalEmployees: 0,
-    pendingFees: 0,
-    totalCollected: 0,
-    attendanceRate: 0,
-    pendingTasks: 0,
-    pendingLeaves: 0,
-  })
-  const [recentTasks, setRecentTasks] = useState<Task[]>([])
+  const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [feeSummary, setFeeSummary] = useState<FeeDashboardSummary | null>(null)
   const [recentLogs, setRecentLogs] = useState<AuditLog[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
-      if (!user?.tenantId) return
-
-      // Fetch real API summary alongside local data in parallel
-      const [summary, feeStats, hrStats, taskStats, attendanceStats, tasks, logs] = await Promise.all([
+      const [s, f, logs] = await Promise.all([
         dashboardService.getSummary(),
-        feeService.getFeeSummary(user.tenantId),
-        employeeService.getHRStats(user.tenantId),
-        taskService.getTaskStats(user.tenantId),
-        attendanceService.getTodayStats(user.tenantId),
-        taskService.getTasks(user.tenantId),
-        auditService.getRecent(5, user.tenantId),
+        feeService.getDashboardSummary(),
+        auditService.getPlatformLogs({ limit: 5 }),
       ])
-
-      setStats({
-        // From real API
-        totalUsers: summary?.users?.total ?? 0,
-        activeUsers: summary?.users?.active ?? 0,
-        income: parseFloat(summary?.finance?.income ?? '0'),
-        expenses: parseFloat(summary?.finance?.expenses ?? '0'),
-        netIncome: parseFloat(summary?.finance?.netIncome ?? '0'),
-        enabledFeatures: summary?.features?.enabledCount ?? 0,
-        // From local services (fallback / supplemental)
-        totalEmployees: hrStats.totalEmployees || 0,
-        pendingFees: feeStats.totalPending || 0,
-        totalCollected: feeStats.totalCollected || 0,
-        attendanceRate: Number.isFinite(attendanceStats.attendanceRate) ? attendanceStats.attendanceRate : 0,
-        pendingTasks: (taskStats.pending || 0) + (taskStats.inProgress || 0),
-        pendingLeaves: hrStats.pendingLeaves || 0,
-      })
-      setRecentTasks(tasks.slice(0, 5))
-      setRecentLogs(logs)
+      setSummary(s)
+      setFeeSummary(f)
+      setRecentLogs(logs.data)
       setIsLoading(false)
     }
     loadData()
-  }, [user?.tenantId])
-
-  const getPriorityColor = (priority: Task['priority']) => {
-    switch (priority) {
-      case 'urgent':
-        return 'destructive'
-      case 'high':
-        return 'default'
-      case 'medium':
-        return 'secondary'
-      default:
-        return 'outline'
-    }
-  }
+  }, [])
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader 
-          title={`Welcome back, ${user?.name}`} 
-          description={tenant?.name || 'Loading...'} 
+        <PageHeader
+          title={`Welcome back, ${user?.name}`}
+          description={tenant?.name || 'Loading...'}
         />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4].map(i => (
             <Card key={i} className="animate-pulse">
               <CardContent className="p-6">
                 <div className="h-20 bg-muted rounded" />
@@ -121,139 +74,77 @@ export function TenantAdminDashboard() {
     )
   }
 
+  const netIncome = parseFloat(summary?.finance?.netIncome ?? '0')
+
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title={`Welcome back, ${user?.name}`} 
-        description={tenant?.name || 'School Dashboard'} 
+      <PageHeader
+        title={`Welcome back, ${user?.name}`}
+        description={tenant?.name || 'School Dashboard'}
       />
 
-      {/* Stats Grid */}
-  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-    <StatCard
-      title="Total Users"
-      value={stats.totalUsers}
-      description={`${stats.activeUsers} active`}
-      icon={Users}
-    />
-    <StatCard
-      title="Income"
-      value={formatCurrency(stats.income)}
-      description="This period"
-      icon={TrendingUp}
-    />
-    <StatCard
-      title="Expenses"
-      value={formatCurrency(stats.expenses)}
-      description={`Net: ${formatCurrency(stats.netIncome)}`}
-      icon={DollarSign}
-    />
-    <StatCard
-      title="Attendance Rate"
-      value={`${stats.attendanceRate.toFixed(1)}%`}
-      description={`${stats.enabledFeatures} features enabled`}
-      icon={Clock}
-    />
-  </div>
+      {/* Top stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Users"
+          value={summary?.users?.total ?? 0}
+          description={`${summary?.users?.active ?? 0} active · ${summary?.users?.invited ?? 0} invited`}
+          icon={Users}
+        />
+        <StatCard
+          title="Income"
+          value={`${money(summary?.finance?.income)}`}
+          description="This period"
+          icon={TrendingUp}
+        />
+        <StatCard
+          title="Expenses"
+          value={`${money(summary?.finance?.expenses)}`}
+          description={`Net: ${netIncome >= 0 ? '+' : ''}${money(netIncome)}`}
+          icon={TrendingDown}
+        />
+        <StatCard
+          title="Features Enabled"
+          value={summary?.features?.enabledCount ?? 0}
+          description={`${summary?.features?.disabledCount ?? 0} disabled`}
+          icon={Zap}
+        />
+      </div>
 
-      {/* Alerts */}
-      {(stats.pendingLeaves > 0 || stats.pendingFees > 10000) && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {stats.pendingLeaves > 0 && (
-            <Card className="border-l-4 border-l-yellow-500">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="p-2 rounded-lg bg-yellow-500/10">
-                  <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">
-                    {stats.pendingLeaves} Pending Leave Request{stats.pendingLeaves > 1 ? 's' : ''}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Requires your approval</p>
-                </div>
-                <Link href="/dashboard/hr/leaves">
-                  <Button variant="outline" size="sm">Review</Button>
-                </Link>
-              </CardContent>
-            </Card>
-          )}
-          {stats.pendingFees > 10000 && (
-            <Card className="border-l-4 border-l-red-500">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="p-2 rounded-lg bg-red-500/10">
-                  <DollarSign className="h-5 w-5 text-red-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">
-                    {formatCurrency(stats.pendingFees)} Pending Fees
-                  </p>
-                  <p className="text-sm text-muted-foreground">Outstanding payments</p>
-                </div>
-                <Link href="/dashboard/fees/invoices">
-                  <Button variant="outline" size="sm">View</Button>
-                </Link>
-              </CardContent>
-            </Card>
-          )}
+      {/* Fee summary */}
+      {feeSummary && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Total Invoiced</p>
+              <p className="text-2xl font-bold text-blue-600">{money(feeSummary.totalInvoiced)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Total Collected</p>
+              <p className="text-2xl font-bold text-green-600">{money(feeSummary.totalCollected)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Outstanding</p>
+              <p className="text-2xl font-bold text-orange-600">{money(feeSummary.totalOutstanding)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Collection Rate</p>
+              <p className="text-2xl font-bold text-purple-600">{fmt(feeSummary.collectionRate)}%</p>
+              {parseFloat(feeSummary.totalOverdue) > 0 && (
+                <p className="text-xs text-red-500 mt-1">Overdue: {money(feeSummary.totalOverdue)}</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Tasks */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Recent Tasks</CardTitle>
-              <CardDescription>Tasks requiring attention</CardDescription>
-            </div>
-            <Link href="/dashboard/tasks">
-              <Button variant="outline" size="sm">
-                View All
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No tasks found
-                </p>
-              ) : (
-                recentTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex items-center justify-between p-3 rounded-lg border border-border"
-                  >
-                    <div className="flex-1 min-w-0 mr-4">
-                      <p className="font-medium text-foreground truncate">{task.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant={getPriorityColor(task.priority)} className="text-xs">
-                          {task.priority}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          Due {formatDate(task.dueDate)}
-                        </span>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={
-                        task.status === 'completed'
-                          ? 'default'
-                          : task.status === 'in_progress'
-                          ? 'secondary'
-                          : 'outline'
-                      }
-                    >
-                      {task.status.replace('_', ' ')}
-                    </Badge>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Recent Activity */}
         <Card>
           <CardHeader>
@@ -263,28 +154,67 @@ export function TenantAdminDashboard() {
           <CardContent>
             <div className="space-y-4">
               {recentLogs.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No recent activity
-                </p>
+                <p className="text-sm text-muted-foreground text-center py-8">No recent activity</p>
               ) : (
-                recentLogs.map((log) => (
+                recentLogs.map(log => (
                   <div key={log.id} className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mt-0.5">
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mt-0.5 flex-shrink-0">
                       <Activity className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-foreground">
-                        <span className="font-medium">{log.userName}</span>{' '}
-                        <span className="text-muted-foreground">{log.action.toLowerCase()}</span>{' '}
-                        <span className="font-medium">{log.entity}</span>
+                        <span className="font-medium">{log.actorUserId ? log.actorUserId.slice(-8) : 'System'}</span>{' '}
+                        <span className="text-muted-foreground">{log.action.toLowerCase().replace(/_/g, ' ')}</span>
+                        {log.entityType && (
+                          <> <span className="font-medium">{log.entityType}</span></>
+                        )}
                       </p>
+                      {log.module && (
+                        <Badge variant="outline" className="text-xs mt-1">{log.module}</Badge>
+                      )}
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatDateTime(log.timestamp)}
+                        {new Date(log.createdAt).toLocaleString()}
                       </p>
                     </div>
                   </div>
                 ))
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* User summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle>User Overview</CardTitle>
+            <CardDescription>Account status breakdown</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[
+                { label: 'Active Users', value: summary?.users?.active ?? 0, color: 'bg-green-500', textColor: 'text-green-700' },
+                { label: 'Invited (Pending)', value: summary?.users?.invited ?? 0, color: 'bg-yellow-500', textColor: 'text-yellow-700' },
+                { label: 'Inactive Users', value: summary?.users?.inactive ?? 0, color: 'bg-gray-400', textColor: 'text-gray-600' },
+              ].map(row => {
+                const total = summary?.users?.total || 1
+                const pct = Math.round((row.value / total) * 100)
+                return (
+                  <div key={row.label} className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{row.label}</span>
+                      <span className={`font-semibold ${row.textColor}`}>{row.value} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full ${row.color} rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+              <Link href="/dashboard/users">
+                <Button variant="outline" size="sm" className="w-full mt-2">
+                  Manage Users <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
@@ -304,22 +234,22 @@ export function TenantAdminDashboard() {
                 <span>Record Payment</span>
               </Button>
             </Link>
-            <Link href="/dashboard/attendance">
-              <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 bg-transparent">
-                <Clock className="h-5 w-5" />
-                <span>Mark Attendance</span>
-              </Button>
-            </Link>
-            <Link href="/dashboard/tasks">
-              <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 bg-transparent">
-                <ListTodo className="h-5 w-5" />
-                <span>Create Task</span>
-              </Button>
-            </Link>
-            <Link href="/dashboard/hr/employees">
+            <Link href="/dashboard/fees/students">
               <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 bg-transparent">
                 <Users className="h-5 w-5" />
-                <span>Manage Staff</span>
+                <span>Student Fees</span>
+              </Button>
+            </Link>
+            <Link href="/dashboard/finance/cashier">
+              <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 bg-transparent">
+                <Clock className="h-5 w-5" />
+                <span>Finance Entry</span>
+              </Button>
+            </Link>
+            <Link href="/dashboard/users">
+              <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 bg-transparent">
+                <ListTodo className="h-5 w-5" />
+                <span>Manage Users</span>
               </Button>
             </Link>
           </div>

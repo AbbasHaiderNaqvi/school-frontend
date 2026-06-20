@@ -1,11 +1,14 @@
-import { api } from './api-client'
+import { api, toPaginated } from './api-client'
 
 export type ApiUserRole =
+  | 'super_admin'
   | 'tenant_owner'
-  | 'admin'
+  | 'tenant_admin'
+  | 'tenant_principal'
+  | 'tenant_accountant'
+  | 'tenant_cashier'
   | 'teacher'
-  | 'accountant'
-  | 'receptionist'
+  | 'hr'
   | 'student'
   | 'parent'
 
@@ -26,6 +29,9 @@ export interface CreateUserRequest {
   email: string
   role: ApiUserRole
   phone?: string
+  employeeId?: string
+  studentId?: string
+  parentId?: string
 }
 
 export interface CreateUserResponse {
@@ -68,9 +74,8 @@ export const usersService = {
     if (params.status) query.set('status', params.status)
     if (params.search) query.set('search', params.search)
     const qs = query.toString()
-    const { data, error } = await api.get<Paginated<UserListItem>>(`/users${qs ? `?${qs}` : ''}`)
-    if (error || !data) return { data: [], total: 0, page: 1, limit: 20 }
-    return data
+    const { data } = await api.get<Paginated<UserListItem>>(`/users${qs ? `?${qs}` : ''}`)
+    return toPaginated(data)
   },
 
   async getById(id: string): Promise<UserListItem | null> {

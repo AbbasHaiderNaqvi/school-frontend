@@ -1,11 +1,11 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
@@ -16,8 +16,8 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
 import type { Budget, GlAccount } from '@/lib/services/finance'
@@ -29,10 +29,11 @@ function fmt(val: string | number | undefined): string {
 }
 
 export default function BudgetsPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [glAccounts, setGlAccounts] = useState<GlAccount[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -45,17 +46,21 @@ export default function BudgetsPage() {
     endDate: '',
   })
 
-  const canManage = user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'accountant'
-
   const loadData = useCallback(async () => {
     setIsLoading(true)
-    const [buds, accts] = await Promise.all([
-      financeService.getBudgets(),
-      financeService.getGLAccounts({ type: 'EXPENSE' }),
-    ])
-    setBudgets(buds)
-    setGlAccounts(accts)
-    setIsLoading(false)
+    setLoadError('')
+    try {
+      const [buds, accts] = await Promise.all([
+        financeService.getBudgets(),
+        financeService.getGLAccounts({ type: 'EXPENSE' }),
+      ])
+      setBudgets(buds)
+      setGlAccounts(accts)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
@@ -82,6 +87,8 @@ export default function BudgetsPage() {
     loadData()
   }
 
+  if (!can('finance.budget.read')) return <AccessDenied />
+
   const filtered = budgets.filter(b =>
     !searchQuery || b.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -94,7 +101,7 @@ export default function BudgetsPage() {
         title="Budget Management"
         description="Create and monitor budgets by GL account"
         action={
-          canManage ? (
+          can('finance.budget.create') ? (
             <Button onClick={() => { setCreateError(''); setIsCreateOpen(true) }}>
               <Plus className="h-4 w-4 mr-2" /> New Budget
             </Button>
@@ -116,7 +123,7 @@ export default function BudgetsPage() {
           <CardContent className="flex items-center justify-between pt-6">
             <div>
               <p className="text-sm text-muted-foreground">Total Allocated</p>
-              <p className="text-2xl font-bold">${fmt(totalAllocated)}</p>
+              <p className="text-2xl font-bold">{money(totalAllocated)}</p>
             </div>
             <div className="p-3 rounded-lg bg-green-100"><Wallet className="h-6 w-6 text-green-600" /></div>
           </CardContent>
@@ -138,6 +145,11 @@ export default function BudgetsPage() {
           <CardDescription>{filtered.length} budgets found</CardDescription>
         </CardHeader>
         <CardContent>
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
           {isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : (
@@ -155,8 +167,10 @@ export default function BudgetsPage() {
                 {filtered.map(b => (
                   <TableRow key={b.id}>
                     <TableCell className="font-medium">{b.name}</TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-sm">{b.glAccountId.slice(-8)}</TableCell>
-                    <TableCell className="text-right font-semibold">${fmt(b.allocatedAmount)}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {b.glAccount ? `${b.glAccount.code} — ${b.glAccount.name}` : (b.glAccountId ?? '—')}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">{money(b.allocatedAmount)}</TableCell>
                     <TableCell>{b.startDate}</TableCell>
                     <TableCell>{b.endDate}</TableCell>
                   </TableRow>

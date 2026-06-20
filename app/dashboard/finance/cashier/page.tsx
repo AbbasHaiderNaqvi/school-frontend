@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -128,7 +129,7 @@ export default function CashierPage() {
                     <TableCell><Badge className={TYPE_COLORS[t.type]}>{t.type}</Badge></TableCell>
                     <TableCell className="font-medium">{t.description}</TableCell>
                     <TableCell className="text-muted-foreground">{t.categoryAccount?.name ?? '—'}</TableCell>
-                    <TableCell className="text-right font-semibold">${fmt(t.amount)}</TableCell>
+                    <TableCell className="text-right font-semibold">{money(t.amount)}</TableCell>
                     <TableCell className="font-mono text-sm">{t.reference}</TableCell>
                     <TableCell><Badge variant="outline">{t.status}</Badge></TableCell>
                   </TableRow>

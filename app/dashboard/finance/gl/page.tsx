@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
@@ -73,11 +74,16 @@ export default function GeneralLedgerPage() {
   const loadAccounts = useCallback(async () => {
     setIsLoading(true)
     setError('')
-    const data = await financeService.getGLAccounts(
-      filterType !== 'all' ? { type: filterType as GlAccountType } : {}
-    )
-    setAccounts(data)
-    setIsLoading(false)
+    try {
+      const data = await financeService.getGLAccounts(
+        filterType !== 'all' ? { type: filterType as GlAccountType } : {}
+      )
+      setAccounts(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [filterType])
 
   useEffect(() => { loadAccounts() }, [loadAccounts])
@@ -162,7 +168,7 @@ export default function GeneralLedgerPage() {
           <Card key={value}>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="text-xl font-bold mt-1">${fmt(totalByType[value] || 0)}</p>
+              <p className="text-xl font-bold mt-1">{money(totalByType[value] || 0)}</p>
             </CardContent>
           </Card>
         ))}
@@ -214,7 +220,7 @@ export default function GeneralLedgerPage() {
                     <TableCell><Badge className={TYPE_COLORS[a.type]}>{a.type}</Badge></TableCell>
                     <TableCell><Badge variant="outline">{a.normalSide}</Badge></TableCell>
                     <TableCell><Badge variant={a.isActive ? 'default' : 'secondary'}>{a.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
-                    <TableCell className="text-right font-medium">${fmt(a.balance)}</TableCell>
+                    <TableCell className="text-right font-medium">{money(a.balance)}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

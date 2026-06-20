@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useAuth } from '@/contexts/auth-context'
 import { useEffect, useState, useCallback } from 'react'
 import { financeService } from '@/lib/services/finance'
@@ -89,28 +90,28 @@ export default function FinancialReportsPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Total Assets</p>
-            <p className="text-2xl font-bold text-blue-600">${fmt(totalAssets)}</p>
+            <p className="text-2xl font-bold text-blue-600">{money(totalAssets)}</p>
             <p className="text-xs text-muted-foreground mt-1">{glAccounts.filter(a => a.type === 'ASSET').length} accounts</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Total Liabilities</p>
-            <p className="text-2xl font-bold text-red-600">${fmt(totalLiabilities)}</p>
+            <p className="text-2xl font-bold text-red-600">{money(totalLiabilities)}</p>
             <p className="text-xs text-muted-foreground mt-1">{glAccounts.filter(a => a.type === 'LIABILITY').length} accounts</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Total Income</p>
-            <p className="text-2xl font-bold text-green-600">${fmt(totalIncome)}</p>
+            <p className="text-2xl font-bold text-green-600">{money(totalIncome)}</p>
             <p className="text-xs text-muted-foreground mt-1">{glAccounts.filter(a => a.type === 'INCOME').length} accounts</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Total Expenses</p>
-            <p className="text-2xl font-bold text-orange-600">${fmt(totalExpense)}</p>
+            <p className="text-2xl font-bold text-orange-600">{money(totalExpense)}</p>
             <p className="text-xs text-muted-foreground mt-1">{glAccounts.filter(a => a.type === 'EXPENSE').length} accounts</p>
           </CardContent>
         </Card>
@@ -149,7 +150,7 @@ export default function FinancialReportsPage() {
                         <TableCell className="font-mono font-semibold">{a.code}</TableCell>
                         <TableCell>{a.name}</TableCell>
                         <TableCell><Badge className={TYPE_COLORS[a.type]}>{a.type}</Badge></TableCell>
-                        <TableCell className="text-right font-semibold">${fmt(a.balance)}</TableCell>
+                        <TableCell className="text-right font-semibold">{money(a.balance)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -203,7 +204,7 @@ export default function FinancialReportsPage() {
                         <TableCell><Badge variant="outline">{t.type}</Badge></TableCell>
                         <TableCell className="font-medium">{t.description}</TableCell>
                         <TableCell className="text-muted-foreground">{t.categoryAccount?.name ?? '—'}</TableCell>
-                        <TableCell className="text-right font-semibold">${fmt(t.amount)}</TableCell>
+                        <TableCell className="text-right font-semibold">{money(t.amount)}</TableCell>
                         <TableCell><Badge variant="outline">{t.status}</Badge></TableCell>
                         <TableCell className="font-mono text-sm">{t.reference}</TableCell>
                       </TableRow>
@@ -241,7 +242,7 @@ export default function FinancialReportsPage() {
                         <TableCell className="text-sm">{e.date}</TableCell>
                         <TableCell className="max-w-xs truncate font-medium">{e.description}</TableCell>
                         <TableCell>{e.categoryAccount?.name ? <Badge variant="outline" className="text-xs">{e.categoryAccount.name}</Badge> : '—'}</TableCell>
-                        <TableCell className="text-right font-semibold">${fmt(e.amount)}</TableCell>
+                        <TableCell className="text-right font-semibold">{money(e.amount)}</TableCell>
                         <TableCell><Badge variant="outline">{e.status}</Badge></TableCell>
                       </TableRow>
                     ))}
@@ -266,7 +267,7 @@ export default function FinancialReportsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 rounded-lg bg-blue-50">
                       <p className="text-xs text-muted-foreground">Total Allocated</p>
-                      <p className="text-lg font-bold text-blue-600">${fmt(totalAllocated)}</p>
+                      <p className="text-lg font-bold text-blue-600">{money(totalAllocated)}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50">
                       <p className="text-xs text-muted-foreground">Total Budgets</p>
@@ -288,7 +289,7 @@ export default function FinancialReportsPage() {
                         <TableRow key={b.id}>
                           <TableCell className="font-medium">{b.name}</TableCell>
                           <TableCell className="font-mono text-sm">{b.glAccountId.slice(-8)}</TableCell>
-                          <TableCell className="text-right font-semibold">${fmt(b.allocatedAmount)}</TableCell>
+                          <TableCell className="text-right font-semibold">{money(b.allocatedAmount)}</TableCell>
                           <TableCell>{b.startDate}</TableCell>
                           <TableCell>{b.endDate}</TableCell>
                         </TableRow>

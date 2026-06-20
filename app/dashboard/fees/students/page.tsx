@@ -1,5 +1,6 @@
 'use client'
 
+import { money } from '@/lib/currency'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,6 +16,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { feeService } from '@/lib/services/fee'
 import type { StudentFeeAssignment, StudentFeeDetail, FeeInvoice } from '@/lib/services/fee'
 import { academicsService } from '@/lib/services/academics'
@@ -46,6 +48,7 @@ export default function StudentFeesPage() {
   const [assignments, setAssignments] = useState<StudentFeeAssignment[]>([])
   const [classes, setClasses] = useState<AcademicClass[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [selectedClass, setSelectedClass] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [detailStudent, setDetailStudent] = useState<StudentFeeDetail | null>(null)
@@ -54,13 +57,19 @@ export default function StudentFeesPage() {
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
-    const [asgn, clsList] = await Promise.all([
-      feeService.getStudentFees({ limit: 200 }),
-      academicsService.getClasses({ limit: 100 }),
-    ])
-    setAssignments(asgn.data)
-    setClasses(clsList.data)
-    setIsLoading(false)
+    setLoadError('')
+    try {
+      const [asgn, clsList] = await Promise.all([
+        feeService.getStudentFees({ limit: 200 }),
+        academicsService.getClasses({ limit: 100 }),
+      ])
+      setAssignments(asgn.data)
+      setClasses(clsList.data)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load data. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
@@ -123,6 +132,11 @@ export default function StudentFeesPage() {
           <CardDescription>Click a row to view full invoice and payment history</CardDescription>
         </CardHeader>
         <CardContent>
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
           {isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : (
@@ -154,13 +168,13 @@ export default function StudentFeesPage() {
                         <p className="font-medium">{a.studentName ?? a.studentId.slice(-8)}</p>
                       </TableCell>
                       <TableCell className="text-sm">{a.academicYear}</TableCell>
-                      <TableCell className="text-right font-medium">${fmt(a.totalFee)}</TableCell>
+                      <TableCell className="text-right font-medium">{money(a.totalFee)}</TableCell>
                       <TableCell className="text-right text-green-600">
-                        {parseFloat(a.discountAmount) > 0 ? `-$${fmt(a.discountAmount)}` : '—'}
+                        {parseFloat(a.discountAmount) > 0 ? `-${money(a.discountAmount)}` : '—'}
                       </TableCell>
-                      <TableCell className="text-right font-medium">${fmt(a.netAmount)}</TableCell>
-                      <TableCell className="text-right text-green-600">${fmt(a.paidAmount)}</TableCell>
-                      <TableCell className="text-right font-semibold text-orange-600">${fmt(a.balanceAmount)}</TableCell>
+                      <TableCell className="text-right font-medium">{money(a.netAmount)}</TableCell>
+                      <TableCell className="text-right text-green-600">{money(a.paidAmount)}</TableCell>
+                      <TableCell className="text-right font-semibold text-orange-600">{money(a.balanceAmount)}</TableCell>
                       <TableCell>
                         <Badge className={STATUS_COLORS[a.status]}>{a.status}</Badge>
                       </TableCell>
@@ -195,10 +209,10 @@ export default function StudentFeesPage() {
             <div className="space-y-6">
               <div className="grid grid-cols-4 gap-3">
                 {[
-                  { label: 'Total Invoiced', value: `$${fmt(detailStudent.summary.totalInvoiced)}`, color: 'text-blue-600' },
-                  { label: 'Total Paid', value: `$${fmt(detailStudent.summary.totalPaid)}`, color: 'text-green-600' },
-                  { label: 'Discount', value: `$${fmt(detailStudent.summary.totalDiscount)}`, color: 'text-purple-600' },
-                  { label: 'Outstanding', value: `$${fmt(detailStudent.summary.outstanding)}`, color: 'text-orange-600' },
+                  { label: 'Total Invoiced', value: `${money(detailStudent.summary.totalInvoiced)}`, color: 'text-blue-600' },
+                  { label: 'Total Paid', value: `${money(detailStudent.summary.totalPaid)}`, color: 'text-green-600' },
+                  { label: 'Discount', value: `${money(detailStudent.summary.totalDiscount)}`, color: 'text-purple-600' },
+                  { label: 'Outstanding', value: `${money(detailStudent.summary.outstanding)}`, color: 'text-orange-600' },
                 ].map(s => (
                   <div key={s.label} className="p-3 rounded-lg bg-muted">
                     <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -228,9 +242,9 @@ export default function StudentFeesPage() {
                         <TableRow key={inv.id}>
                           <TableCell className="font-mono text-sm">{inv.invoiceNo}</TableCell>
                           <TableCell className="text-sm">{inv.dueDate}</TableCell>
-                          <TableCell className="text-right">${fmt(inv.netAmount)}</TableCell>
-                          <TableCell className="text-right text-green-600">${fmt(inv.paidAmount)}</TableCell>
-                          <TableCell className="text-right text-orange-600">${fmt(inv.balanceAmount)}</TableCell>
+                          <TableCell className="text-right">{money(inv.netAmount)}</TableCell>
+                          <TableCell className="text-right text-green-600">{money(inv.paidAmount)}</TableCell>
+                          <TableCell className="text-right text-orange-600">{money(inv.balanceAmount)}</TableCell>
                           <TableCell>
                             <Badge className={INVOICE_STATUS_COLORS[inv.status] ?? ''}>{inv.status}</Badge>
                           </TableCell>
@@ -260,7 +274,7 @@ export default function StudentFeesPage() {
                         <TableRow key={p.id}>
                           <TableCell className="text-sm">{p.paymentDate}</TableCell>
                           <TableCell><Badge variant="outline">{p.paymentMethod}</Badge></TableCell>
-                          <TableCell className="text-right font-semibold text-green-600">${fmt(p.amount)}</TableCell>
+                          <TableCell className="text-right font-semibold text-green-600">{money(p.amount)}</TableCell>
                           <TableCell className="font-mono text-sm">{p.referenceNo ?? '—'}</TableCell>
                         </TableRow>
                       ))}
