@@ -196,13 +196,13 @@ export default function PaymentsPage() {
         </Card>
       </div>
 
-      <div className="flex justify-between items-center">
-        <div className="relative max-w-sm">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search by reference or date…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
         </div>
         {can('fees.payment.create') && (
-          <Button onClick={openRecordDialog}>
+          <Button onClick={openRecordDialog} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" /> Record Payment
           </Button>
         )}

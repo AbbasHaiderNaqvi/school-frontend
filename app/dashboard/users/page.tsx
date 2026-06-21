@@ -203,8 +203,8 @@ export default function UserManagementPage() {
       <Card>
         <CardHeader>
           <CardTitle>Users ({total})</CardTitle>
-          <div className="flex flex-wrap gap-3 mt-4">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 mt-4">
+            <div className="relative sm:flex-1 sm:min-w-[200px]">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search name or email…"
@@ -214,7 +214,7 @@ export default function UserManagementPage() {
               />
             </div>
             <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1) }}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder="All Roles" />
               </SelectTrigger>
               <SelectContent>
@@ -223,7 +223,7 @@ export default function UserManagementPage() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-full sm:w-[140px]">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>

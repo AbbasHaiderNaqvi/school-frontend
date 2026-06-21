@@ -186,13 +186,13 @@ export default function ExpensesPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search by description or reference…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="PENDING_APPROVAL">Pending</SelectItem>

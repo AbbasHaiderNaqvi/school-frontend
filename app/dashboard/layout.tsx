@@ -5,7 +5,7 @@ import React from "react"
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
-import { AppSidebar } from '@/components/layout/app-sidebar'
+import { AppSidebar, MobileTopBar } from '@/components/layout/app-sidebar'
 import { Loader2 } from 'lucide-react'
 
 export default function DashboardLayout({
@@ -40,8 +40,9 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar />
-      <main className="pl-64">
-        <div className="p-6">{children}</div>
+      <MobileTopBar />
+      <main className="lg:pl-64 pt-14 lg:pt-0">
+        <div className="p-4 sm:p-6">{children}</div>
       </main>
     </div>
   )

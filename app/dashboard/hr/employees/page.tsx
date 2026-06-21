@@ -277,8 +277,8 @@ export default function EmployeesPage() {
       <Card>
         <CardHeader>
           <CardTitle>All Employees ({total})</CardTitle>
-          <div className="flex flex-wrap gap-3 mt-3">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 mt-3">
+            <div className="relative sm:flex-1 sm:min-w-[200px]">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name or email…"
@@ -288,21 +288,21 @@ export default function EmployeesPage() {
               />
             </div>
             <Select value={deptFilter || 'all'} onValueChange={v => setDeptFilter(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="All Departments" /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="All Departments" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Departments</SelectItem>
                 {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={statusFilter || 'all'} onValueChange={v => setStatusFilter(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="All Statuses" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 {EMPLOYEE_STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={typeFilter || 'all'} onValueChange={v => setTypeFilter(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-44"><SelectValue placeholder="All Types" /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="All Types" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 {EMPLOYMENT_TYPES.map(t => <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>)}
@@ -439,7 +439,7 @@ export default function EmployeesPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Personal Information</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>First Name <span className="text-destructive">*</span></Label>
                   <Input {...field('firstName')} placeholder="First name" className="mt-1" />
@@ -487,7 +487,7 @@ export default function EmployeesPage() {
 
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Employment</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Department</Label>
                   <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v, designationId: '' }))}>
@@ -535,7 +535,7 @@ export default function EmployeesPage() {
 
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Emergency Contact</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Contact Name</Label>
                   <Input {...field('emergencyContactName')} placeholder="Full name" className="mt-1" />
@@ -553,7 +553,7 @@ export default function EmployeesPage() {
 
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Bank Information</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Bank Name</Label>
                   <Input {...field('bankName')} placeholder="e.g. HBL, UBL" className="mt-1" />

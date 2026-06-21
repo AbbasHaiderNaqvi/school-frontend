@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { getInitials } from '@/lib/utils'
 import {
   GraduationCap,
@@ -31,6 +32,7 @@ import {
   AlertCircle,
   CheckCircle2,
   DollarSign,
+  Menu,
 } from 'lucide-react'
 import {
   Collapsible,
@@ -163,7 +165,7 @@ const navItems: NavItem[] = [
   },
 ]
 
-export function AppSidebar() {
+function SidebarBody({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname()
   const { user, tenant, features, logout } = useAuth()
   const [openItems, setOpenItems] = useState<string[]>([])
@@ -235,6 +237,7 @@ export function AppSidebar() {
       <Link
         key={item.title}
         href={item.href || '#'}
+        onClick={onLinkClick}
         className={cn(
           'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
           isActive
@@ -249,97 +252,139 @@ export function AppSidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
-      <div className="flex flex-col h-full">
-        {/* Logo/Tenant Header */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-          {tenant ? (
-            <>
-              <div className="w-10 h-10 rounded-lg bg-sidebar-accent flex items-center justify-center overflow-hidden">
-                {tenant.logo ? (
-                  <img 
-                    src={tenant.logo || "/placeholder.svg"} 
-                    alt={tenant.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-lg font-bold text-sidebar-foreground">
-                    {getInitials(tenant.name)}
-                  </span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h1 className="font-bold text-sidebar-foreground truncate">{tenant.name}</h1>
-                <p className="text-xs text-sidebar-foreground/60">School ERP</p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center">
-                <GraduationCap className="w-6 h-6 text-sidebar-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="font-bold text-sidebar-foreground">Mudirr</h1>
-                <p className="text-xs text-sidebar-foreground/60">School Manager</p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Tenant contact info badge (if admin) */}
-        {tenant && tenant.contactInfo?.email && ['admin', 'principal', 'tenant_owner'].includes(user?.role || '') && (
-          <div className="px-4 py-2 border-b border-sidebar-border">
-            <div className="px-3 py-2 rounded-lg bg-sidebar-accent/30 space-y-1">
-              <div className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
-                <Building2 className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{tenant.contactInfo.email}</span>
-              </div>
-              {tenant.contactInfo.phone && (
-                <div className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
-                  <span className="w-3 text-center">P</span>
-                  <span className="truncate">{tenant.contactInfo.phone}</span>
-                </div>
+    <div className="flex flex-col h-full">
+      {/* Logo/Tenant Header */}
+      <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
+        {tenant ? (
+          <>
+            <div className="w-10 h-10 rounded-lg bg-sidebar-accent flex items-center justify-center overflow-hidden shrink-0">
+              {tenant.logo ? (
+                <img
+                  src={tenant.logo || "/placeholder.svg"}
+                  alt={tenant.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-lg font-bold text-sidebar-foreground">
+                  {getInitials(tenant.name)}
+                </span>
               )}
             </div>
-          </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-bold text-sidebar-foreground truncate">{tenant.name}</h1>
+              <p className="text-xs text-sidebar-foreground/60">School ERP</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
+              <GraduationCap className="w-6 h-6 text-sidebar-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="font-bold text-sidebar-foreground">Mudirr</h1>
+              <p className="text-xs text-sidebar-foreground/60">School Manager</p>
+            </div>
+          </>
         )}
+      </div>
 
-        {/* Navigation */}
-        <ScrollArea className="flex-1 px-4 py-4">
-          <nav className="space-y-1">{filteredNavItems.map((item) => renderNavItem(item))}</nav>
-        </ScrollArea>
-
-        {/* User section */}
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="flex items-center gap-3 mb-3">
-            <Avatar className="h-9 w-9">
-              <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-sm">
-                {getInitials(user?.name || 'U')}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">
-                {user?.name}
-              </p>
-              <div className="flex items-center gap-1">
-                <Shield className="h-3 w-3 text-sidebar-foreground/60" />
-                <p className="text-xs text-sidebar-foreground/60 capitalize">
-                  {user?.role?.replace('_', ' ')}
-                </p>
+      {/* Tenant contact info badge (if admin) */}
+      {tenant && tenant.contactInfo?.email && ['admin', 'principal', 'tenant_owner'].includes(user?.role || '') && (
+        <div className="px-4 py-2 border-b border-sidebar-border">
+          <div className="px-3 py-2 rounded-lg bg-sidebar-accent/30 space-y-1">
+            <div className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
+              <Building2 className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{tenant.contactInfo.email}</span>
+            </div>
+            {tenant.contactInfo.phone && (
+              <div className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
+                <span className="w-3 text-center">P</span>
+                <span className="truncate">{tenant.contactInfo.phone}</span>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <ScrollArea className="flex-1 px-4 py-4">
+        <nav className="space-y-1">{filteredNavItems.map((item) => renderNavItem(item))}</nav>
+      </ScrollArea>
+
+      {/* User section */}
+      <div className="p-4 border-t border-sidebar-border">
+        <div className="flex items-center gap-3 mb-3">
+          <Avatar className="h-9 w-9">
+            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-sm">
+              {getInitials(user?.name || 'U')}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-sidebar-foreground truncate">
+              {user?.name}
+            </p>
+            <div className="flex items-center gap-1">
+              <Shield className="h-3 w-3 text-sidebar-foreground/60" />
+              <p className="text-xs text-sidebar-foreground/60 capitalize">
+                {user?.role?.replace('_', ' ')}
+              </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-start gap-2 bg-transparent border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent"
-            onClick={() => logout()}
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </Button>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start gap-2 bg-transparent border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent"
+          onClick={() => logout()}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </Button>
       </div>
+    </div>
+  )
+}
+
+export function AppSidebar() {
+  return (
+    <aside className="hidden lg:block fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
+      <SidebarBody />
     </aside>
+  )
+}
+
+export function MobileTopBar() {
+  const [open, setOpen] = useState(false)
+  const { tenant } = useAuth()
+
+  return (
+    <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-sidebar border-b border-sidebar-border flex items-center px-3 gap-3">
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-sidebar-foreground hover:bg-sidebar-accent shrink-0"
+          >
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Open menu</span>
+          </Button>
+        </SheetTrigger>
+        <SheetContent
+          side="left"
+          className="p-0 bg-sidebar border-sidebar-border [&>button]:text-sidebar-foreground/70 [&>button]:hover:text-sidebar-foreground"
+        >
+          <SidebarBody onLinkClick={() => setOpen(false)} />
+        </SheetContent>
+      </Sheet>
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="w-7 h-7 rounded-md bg-sidebar-primary flex items-center justify-center shrink-0">
+          <GraduationCap className="w-4 h-4 text-sidebar-primary-foreground" />
+        </div>
+        <span className="font-bold text-sidebar-foreground truncate text-sm">
+          {tenant?.name ?? 'Mudirr'}
+        </span>
+      </div>
+    </header>
   )
 }

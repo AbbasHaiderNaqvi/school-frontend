@@ -185,7 +185,7 @@ export default function PayrollPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Structures</CardTitle>
@@ -305,8 +305,8 @@ export default function PayrollPage() {
             <Alert variant="destructive"><AlertDescription>{submitError}</AlertDescription></Alert>
           )}
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
                 <Label>Employee <span className="text-destructive">*</span></Label>
                 <Select value={form.employeeId || 'none'} onValueChange={v => setForm(f => ({ ...f, employeeId: v === 'none' ? '' : v }))}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="Select employee" /></SelectTrigger>
