@@ -650,3 +650,6 @@ export const hrService = {
     return !error
   },
 }
+
+// Backward-compatible alias — some pages still import employeeService
+export const employeeService = hrService

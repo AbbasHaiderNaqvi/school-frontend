@@ -21,11 +21,6 @@ const FEATURES = [
   { icon: FileText,    title: 'Approvals & Receipts',   desc: 'Multi-step approval flows, audit trails, and receipts generated automatically.',                        tag: 'Operations' },
 ]
 
-const PREVIEW_BARS = [
-  { name: 'Teaching', pct: 68 },
-  { name: 'Admin',    pct: 22 },
-  { name: 'Support',  pct: 10 },
-]
 
 export default function Home() {
   const router = useRouter()
@@ -99,8 +94,8 @@ export default function Home() {
         }
         .lp-hero-in {
           max-width: 1200px; margin: 0 auto;
-          display: grid; grid-template-columns: 1fr 400px;
-          gap: 72px; align-items: center;
+          display: grid; grid-template-columns: 1fr 380px;
+          gap: 64px; align-items: center;
         }
         .lp-eyebrow {
           display: inline-flex; align-items: center; gap: 8px;
@@ -149,52 +144,49 @@ export default function Home() {
         }
         .lp-cta-b:hover { border-color: var(--sidebar-primary); color: var(--sidebar-foreground); }
 
-        /* ── HERO PREVIEW ───────────────────────── */
-        .lp-preview {
+        /* ── HERO PREVIEW CARD ──────────────────── */
+        .lp-pc {
           background: var(--sidebar-accent);
           border: 1px solid var(--sidebar-border);
-          border-radius: 16px; overflow: hidden;
-        }
-        .lp-preview-top {
-          padding: 24px;
-          border-bottom: 1px solid var(--sidebar-border);
+          border-radius: 14px; overflow: hidden;
           position: relative;
         }
-        .lp-preview-top::before {
+        .lp-pc::before {
           content: ''; position: absolute;
           top: 0; left: 0; right: 0; height: 2px;
           background: var(--sidebar-primary);
         }
-        .lp-prev-label {
-          font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+        .lp-pc-head {
+          padding: 16px 20px 12px;
+          border-bottom: 1px solid var(--sidebar-border);
+          font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
           text-transform: uppercase;
           color: oklch(from var(--sidebar-foreground) l c h / 0.45);
-          margin-bottom: 10px;
         }
-        .lp-prev-big {
-          font-family: 'Fraunces', Georgia, serif;
-          font-size: 38px; font-weight: 700;
-          color: var(--sidebar-foreground); line-height: 1;
+        .lp-pc-body { padding: 14px 20px 16px; }
+
+        /* Modules grid card */
+        .lp-mod-grid {
+          display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
         }
-        .lp-prev-sub {
-          font-size: 12px; margin-top: 4px;
-          color: oklch(from var(--sidebar-foreground) l c h / 0.45);
+        .lp-mod-item {
+          display: flex; flex-direction: column; align-items: center; gap: 6px;
+          padding: 10px 4px; border-radius: 8px;
+          background: oklch(from var(--sidebar-foreground) l c h / 0.04);
+          text-decoration: none; cursor: pointer;
+          transition: background 0.15s;
         }
-        .lp-prev-bars { padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; }
-        .lp-bar-row { display: flex; align-items: center; gap: 10px; }
-        .lp-bar-name {
-          font-size: 12px; width: 68px; flex-shrink: 0;
+        .lp-mod-item:hover { background: oklch(from var(--sidebar-primary) l c h / 0.12); }
+        .lp-mod-item:hover .lp-mod-icon { background: oklch(from var(--sidebar-primary) l c h / 0.25); }
+        .lp-mod-icon {
+          width: 30px; height: 30px; border-radius: 7px;
+          background: oklch(from var(--sidebar-primary) l c h / 0.15);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .lp-mod-label {
+          font-size: 9px; font-weight: 600; letter-spacing: 0.04em;
           color: oklch(from var(--sidebar-foreground) l c h / 0.5);
-        }
-        .lp-bar-track {
-          flex: 1; height: 5px;
-          background: oklch(from var(--sidebar-foreground) l c h / 0.08);
-          border-radius: 3px; overflow: hidden;
-        }
-        .lp-bar-fill { height: 100%; border-radius: 3px; background: var(--sidebar-primary); }
-        .lp-bar-pct {
-          font-size: 11px; width: 30px; text-align: right;
-          color: oklch(from var(--sidebar-foreground) l c h / 0.4);
+          text-align: center; line-height: 1.3;
         }
 
         /* ── FEATURES ───────────────────────────── */
@@ -372,23 +364,29 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Preview card — hidden on mobile */}
-            <div className="lp-preview">
-              <div className="lp-preview-top">
-                <div className="lp-prev-label">Monthly Payroll Overview</div>
-                <div className="lp-prev-big">₨ 12.4M</div>
-                <div className="lp-prev-sub">Total active payroll · 148 staff</div>
-              </div>
-              <div className="lp-prev-bars">
-                {PREVIEW_BARS.map(b => (
-                  <div key={b.name} className="lp-bar-row">
-                    <span className="lp-bar-name">{b.name}</span>
-                    <div className="lp-bar-track">
-                      <div className="lp-bar-fill" style={{ width: `${b.pct}%` }} />
-                    </div>
-                    <span className="lp-bar-pct">{b.pct}%</span>
-                  </div>
-                ))}
+            {/* Modules card — hidden on mobile */}
+            <div className="lp-pc">
+              <div className="lp-pc-head">Modules</div>
+              <div className="lp-pc-body">
+                <div className="lp-mod-grid">
+                  {[
+                    { icon: Users,         label: 'HR' },
+                    { icon: DollarSign,    label: 'Finance' },
+                    { icon: ClipboardList, label: 'Attendance' },
+                    { icon: BookOpen,      label: 'Academics' },
+                    { icon: GraduationCap, label: 'Students' },
+                    { icon: FileText,      label: 'Fees' },
+                    { icon: ShieldCheck,   label: 'Access' },
+                    { icon: Building2,     label: 'Branches' },
+                  ].map(m => (
+                    <a key={m.label} href="#features" className="lp-mod-item">
+                      <div className="lp-mod-icon">
+                        <m.icon style={{ width: 15, height: 15, color: 'var(--sidebar-primary)' }} />
+                      </div>
+                      <span className="lp-mod-label">{m.label}</span>
+                    </a>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
