@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
+import { getTenantSlug } from '@/lib/tenant'
 import {
   GraduationCap, Users, DollarSign, ClipboardList, BookOpen,
   BarChart3, ShieldCheck, Building2, FileText, ArrowRight, ChevronRight,
@@ -25,10 +26,15 @@ const FEATURES = [
 export default function Home() {
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
+  const [isSubdomain, setIsSubdomain] = useState(false)
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) router.push('/dashboard')
   }, [isLoading, isAuthenticated, router])
+
+  useEffect(() => {
+    setIsSubdomain(getTenantSlug() !== null)
+  }, [])
 
   if (isLoading) {
     return (
@@ -332,9 +338,11 @@ export default function Home() {
               </div>
               <span className="lp-brand-name">Mudirr</span>
             </div>
-            <Link href="/login" className="lp-nav-login">
-              Login <ChevronRight style={{ width: 15, height: 15 }} />
-            </Link>
+            {isSubdomain && (
+              <Link href="/login" className="lp-nav-login">
+                Login <ChevronRight style={{ width: 15, height: 15 }} />
+              </Link>
+            )}
           </div>
         </nav>
 
@@ -354,10 +362,12 @@ export default function Home() {
                 From HR and payroll to fees and attendance — Mudirr gives school administrators a complete, connected view of everything that matters.
               </p>
               <div className="lp-ctas">
-                <Link href="/login" className="lp-cta-a">
-                  Login to Dashboard
-                  <ArrowRight style={{ width: 17, height: 17 }} />
-                </Link>
+                {isSubdomain && (
+                  <Link href="/login" className="lp-cta-a">
+                    Login to Dashboard
+                    <ArrowRight style={{ width: 17, height: 17 }} />
+                  </Link>
+                )}
                 <a href="#features" className="lp-cta-b">
                   Explore features
                 </a>
@@ -424,11 +434,20 @@ export default function Home() {
               <em>Is your system?</em>
             </h2>
             <div className="lp-cta-right">
-              <Link href="/login" className="lp-cta-big">
-                Login to Dashboard
-                <ArrowRight style={{ width: 18, height: 18 }} />
-              </Link>
-              <div className="lp-cta-note">All modules. One login.</div>
+              {isSubdomain ? (
+                <Link href="/login" className="lp-cta-big">
+                  Login to Dashboard
+                  <ArrowRight style={{ width: 18, height: 18 }} />
+                </Link>
+              ) : (
+                <a href="mailto:hello@muddir.com" className="lp-cta-big">
+                  Get in touch
+                  <ArrowRight style={{ width: 18, height: 18 }} />
+                </a>
+              )}
+              <div className="lp-cta-note">
+                {isSubdomain ? 'All modules. One login.' : 'For schools ready to go digital.'}
+              </div>
             </div>
           </div>
         </section>
@@ -443,7 +462,10 @@ export default function Home() {
               <span className="lp-foot-name">Mudirr</span>
             </div>
             <span className="lp-foot-txt">School Management System · © {new Date().getFullYear()}</span>
-            <Link href="/login" className="lp-foot-link">Login →</Link>
+            {isSubdomain
+              ? <Link href="/login" className="lp-foot-link">Login →</Link>
+              : <a href="mailto:hello@muddir.com" className="lp-foot-link">Contact →</a>
+            }
           </div>
         </footer>
 

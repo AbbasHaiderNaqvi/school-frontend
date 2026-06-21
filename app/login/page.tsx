@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
+import { getTenantSlug } from '@/lib/tenant'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,6 +19,17 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [tenantSlug, setTenantSlug] = useState<string | null>(null)
+
+  useEffect(() => {
+    const slug = getTenantSlug()
+    if (!slug) {
+      // No subdomain — this page is not accessible from the main domain
+      router.replace('/')
+      return
+    }
+    setTenantSlug(slug)
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,7 +96,12 @@ export default function LoginPage() {
           <Card>
             <CardHeader className="space-y-1">
               <CardTitle className="text-2xl">Sign in</CardTitle>
-              <CardDescription>Enter your credentials to access your account</CardDescription>
+              <CardDescription>
+                {tenantSlug
+                  ? <>Signing in to <span className="font-medium text-foreground">{tenantSlug}</span></>
+                  : 'Enter your credentials to access your account'
+                }
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">

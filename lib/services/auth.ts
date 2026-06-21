@@ -1,5 +1,6 @@
 import { storage, STORAGE_KEYS } from './storage'
 import { api, tokenStore } from './api-client'
+import { getTenantSlug } from '../tenant'
 import type { User, UserRole } from '../types'
 
 export interface LoginCredentials {
@@ -90,10 +91,12 @@ const SESSION_KEY = 'mudir_session'
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     // --- Real API login ---
+    const tenantSlug = getTenantSlug()
+
     const { data, error } = await api.post<ApiLoginResponse>('/auth/login', {
       email: credentials.email,
       password: credentials.password,
-      tenantSlug: 'md-grammar',
+      tenantSlug,
     })
 
     if (data && data.accessToken) {
