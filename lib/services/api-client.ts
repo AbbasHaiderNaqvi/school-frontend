@@ -133,11 +133,13 @@ export function toPaginated<T>(raw: unknown): { data: T[]; total: number; page: 
   }
   const p = raw as Record<string, unknown>
   if (!Array.isArray(p.data)) return empty
+  // Support both { data, total, page, limit } and { data, meta: { total, page, limit } }
+  const meta = p.meta as Record<string, unknown> | undefined
   return {
     data: p.data as T[],
-    total: typeof p.total === 'number' ? p.total : (p.data as T[]).length,
-    page: typeof p.page === 'number' ? p.page : 1,
-    limit: typeof p.limit === 'number' ? p.limit : 20,
+    total: typeof meta?.total === 'number' ? meta.total : typeof p.total === 'number' ? p.total : (p.data as T[]).length,
+    page: typeof meta?.page === 'number' ? meta.page : typeof p.page === 'number' ? p.page : 1,
+    limit: typeof meta?.limit === 'number' ? meta.limit : typeof p.limit === 'number' ? p.limit : 20,
   }
 }
 

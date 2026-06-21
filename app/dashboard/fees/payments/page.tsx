@@ -210,7 +210,7 @@ export default function PaymentsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Payments</CardTitle>
+          <CardTitle>Payments ({payments.length})</CardTitle>
           <CardDescription>All recorded fee payments</CardDescription>
         </CardHeader>
         <CardContent>

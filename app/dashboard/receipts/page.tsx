@@ -139,7 +139,7 @@ export default function ReceiptsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Receipts</CardTitle>
+          <CardTitle>Receipts ({filtered.length})</CardTitle>
           <CardDescription>All fee payment receipts</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

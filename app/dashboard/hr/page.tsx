@@ -8,12 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, RefreshCw, Users, UserCheck, Clock, Briefcase, TrendingUp, AlertCircle, Calendar, Building2 } from 'lucide-react'
+import { money } from '@/lib/currency'
+import {
+  Loader2, RefreshCw, Users, UserCheck, Clock, Briefcase,
+  TrendingUp, AlertCircle, Building2, CalendarCheck, DollarSign,
+} from 'lucide-react'
 import { hrService } from '@/lib/services/hr'
-import type {
-  HrDashboardSummary, DepartmentStat, HeadcountTrendPoint,
-  AttendanceTrendPoint, LeaveBalanceSummary,
-} from '@/lib/services/hr'
+import type { HrDashboardSummary, DepartmentStat, AttendanceTrendPoint, LeaveBalanceSummary } from '@/lib/services/hr'
 import Link from 'next/link'
 
 export default function HROverviewPage() {
@@ -21,7 +22,6 @@ export default function HROverviewPage() {
 
   const [summary, setSummary] = useState<HrDashboardSummary | null>(null)
   const [deptStats, setDeptStats] = useState<DepartmentStat[]>([])
-  const [headcountTrend, setHeadcountTrend] = useState<HeadcountTrendPoint[]>([])
   const [attendanceTrend, setAttendanceTrend] = useState<AttendanceTrendPoint[]>([])
   const [leaveSummary, setLeaveSummary] = useState<LeaveBalanceSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -31,16 +31,14 @@ export default function HROverviewPage() {
     setIsLoading(true)
     setLoadError('')
     try {
-      const [sum, dept, hc, att, leave] = await Promise.all([
+      const [sum, dept, att, leave] = await Promise.all([
         hrService.getDashboardSummary(),
         hrService.getDepartmentStats(),
-        hrService.getHeadcountTrend(),
         hrService.getAttendanceTrend(),
         hrService.getLeaveBalanceSummary(),
       ])
       setSummary(sum)
       setDeptStats(dept)
-      setHeadcountTrend(hc)
       setAttendanceTrend(att)
       setLeaveSummary(leave)
     } catch (err) {
@@ -54,14 +52,11 @@ export default function HROverviewPage() {
 
   if (!can('hr.dashboard.read')) return <AccessDenied />
 
-  // Derived attendance values from last entry in trend
-  const latestAttendance = attendanceTrend[attendanceTrend.length - 1]
-  const attendanceRate = latestAttendance
-    ? Math.round((latestAttendance.present / (latestAttendance.present + latestAttendance.absent + (latestAttendance.onLeave ?? 0))) * 100)
-    : null
-
-  // Last 6 headcount points for mini trend
-  const recentHeadcount = headcountTrend.slice(-6)
+  const emp = summary?.employees
+  const today = summary?.todayAttendance
+  const month = summary?.thisMonthAttendance
+  const leaves = summary?.leaves
+  const payroll = summary?.payroll
 
   return (
     <div className="space-y-6">
@@ -87,41 +82,30 @@ export default function HROverviewPage() {
         </div>
       ) : (
         <>
-          {/* ── Key Stats ───────────────────────────────────────────────── */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* ── Top Stats ──────────────────────────────────────────────── */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{summary?.totalEmployees ?? '—'}</div>
+                <div className="text-2xl font-bold">{emp?.total ?? '—'}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {summary?.activeEmployees ?? 0} active · {summary?.onLeave ?? 0} on leave
+                  {emp?.byType.fullTime ?? 0} full-time · {emp?.byType.partTime ?? 0} part-time
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
+                <CardTitle className="text-sm font-medium">Active</CardTitle>
                 <UserCheck className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{summary?.activeEmployees ?? '—'}</div>
-                <p className="text-xs text-muted-foreground mt-1">Currently working</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">On Leave</CardTitle>
-                <Clock className="h-4 w-4 text-yellow-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">{summary?.onLeave ?? '—'}</div>
+                <div className="text-2xl font-bold text-green-600">{emp?.active ?? '—'}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {summary?.pendingLeaveRequests ?? 0} requests pending
+                  {emp?.byGender.male ?? 0}M · {emp?.byGender.female ?? 0}F
                 </p>
               </CardContent>
             </Card>
@@ -132,8 +116,10 @@ export default function HROverviewPage() {
                 <AlertCircle className="h-4 w-4 text-orange-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600">{summary?.pendingLeaveRequests ?? '—'}</div>
-                <p className="text-xs text-muted-foreground mt-1">Awaiting approval</p>
+                <div className="text-2xl font-bold text-orange-600">{leaves?.pendingApplications ?? '—'}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {leaves?.thisYear.approved.count ?? 0} approved · {leaves?.thisYear.rejected.count ?? 0} rejected this year
+                </p>
               </CardContent>
             </Card>
 
@@ -143,19 +129,74 @@ export default function HROverviewPage() {
                 <Briefcase className="h-4 w-4 text-blue-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-blue-600">{summary?.openPositions ?? '—'}</div>
-                <p className="text-xs text-muted-foreground mt-1">Active job openings</p>
+                <div className="text-2xl font-bold text-blue-600">{summary?.recruitment.openPositions ?? '—'}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {summary?.recruitment.totalVacancies ?? 0} total vacancies
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Attendance + Payroll Row ───────────────────────────────── */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <CalendarCheck className="h-4 w-4" /> Today's Attendance
+                </CardTitle>
+                <CardDescription>{today?.date}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-end gap-1">
+                  <span className="text-2xl font-bold">{today?.attendanceRate ?? 0}%</span>
+                  <span className="text-xs text-muted-foreground mb-1">rate</span>
+                </div>
+                <div className="flex gap-3 mt-2 text-xs">
+                  <span className="text-green-600">✓ {today?.present ?? 0} present</span>
+                  <span className="text-red-500">✗ {today?.absent ?? 0} absent</span>
+                  {(today?.late ?? 0) > 0 && <span className="text-yellow-600">⏱ {today?.late} late</span>}
+                </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">New Hires</CardTitle>
-                <Calendar className="h-4 w-4 text-purple-600" />
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <CalendarCheck className="h-4 w-4" /> This Month
+                </CardTitle>
+                <CardDescription>Attendance summary</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-purple-600">{summary?.newHiresThisMonth ?? '—'}</div>
-                <p className="text-xs text-muted-foreground mt-1">This month</p>
+                <div className="grid grid-cols-2 gap-y-1 text-sm">
+                  <span className="text-muted-foreground">Present</span>
+                  <span className="font-medium text-green-600">{month?.present ?? 0}</span>
+                  <span className="text-muted-foreground">Absent</span>
+                  <span className="font-medium text-red-500">{month?.absent ?? 0}</span>
+                  <span className="text-muted-foreground">Late</span>
+                  <span className="font-medium text-yellow-600">{month?.late ?? 0}</span>
+                  <span className="text-muted-foreground">On Leave</span>
+                  <span className="font-medium">{month?.onLeave ?? 0}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" /> Payroll
+                </CardTitle>
+                <CardDescription>{payroll?.employeesWithSalary ?? 0} employees</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{money(payroll?.totalNetPayroll)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Gross: {money(payroll?.totalGrossPayroll)}
+                </p>
+                {(payroll?.pendingPosting ?? 0) > 0 && (
+                  <Badge variant="destructive" className="text-xs mt-2">
+                    {payroll?.pendingPosting} pending posting
+                  </Badge>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -165,175 +206,143 @@ export default function HROverviewPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" /> Department Breakdown
+                  <Building2 className="h-4 w-4" /> Departments
                 </CardTitle>
-                <CardDescription>{deptStats.length} departments</CardDescription>
+                <CardDescription>{deptStats.filter(d => d.employee_count > 0).length} active departments</CardDescription>
               </CardHeader>
               <CardContent>
                 {deptStats.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-6">No department data</p>
                 ) : (
                   <div className="space-y-3">
-                    {deptStats.map((d, i) => {
-                      const activeRate = d.total > 0 ? Math.round((d.active / d.total) * 100) : 0
-                      return (
-                        <div key={i}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium">{d.department}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">{d.active}/{d.total}</span>
-                              <Badge variant={activeRate >= 90 ? 'default' : activeRate >= 70 ? 'secondary' : 'destructive'} className="text-xs">
-                                {activeRate}%
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="w-full bg-muted rounded-full h-1.5">
-                            <div
-                              className="bg-primary rounded-full h-1.5 transition-all"
-                              style={{ width: `${activeRate}%` }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* ── Leave Balance Summary ────────────────────────────────── */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" /> Leave Balance Summary
-                </CardTitle>
-                <CardDescription>Staff leave quota status</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {!leaveSummary ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">No leave data</p>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                      <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950">
-                        <p className="text-2xl font-bold text-blue-600">{leaveSummary.averageBalance?.toFixed(1) ?? '—'}</p>
-                        <p className="text-xs text-muted-foreground mt-1">Avg. Balance</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950">
-                        <p className="text-2xl font-bold text-orange-600">{leaveSummary.lowBalanceCount ?? 0}</p>
-                        <p className="text-xs text-muted-foreground mt-1">Low Balance</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950">
-                        <p className="text-2xl font-bold text-red-600">{leaveSummary.exhaustedCount ?? 0}</p>
-                        <p className="text-xs text-muted-foreground mt-1">Exhausted</p>
-                      </div>
-                    </div>
-                    {leaveSummary.details && leaveSummary.details.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-2">LOW BALANCE STAFF</p>
-                        <div className="space-y-1.5">
-                          {leaveSummary.details.slice(0, 5).map((d, i) => (
-                            <div key={i} className="flex items-center justify-between text-sm">
-                              <span className="truncate max-w-[160px]">{d.employeeName}</span>
-                              <div className="flex items-center gap-2">
-                                {d.department && <span className="text-xs text-muted-foreground">{d.department}</span>}
-                                <Badge variant={d.leaveBalance <= 0 ? 'destructive' : 'secondary'} className="text-xs">
-                                  {d.leaveBalance} days
-                                </Badge>
+                    {deptStats
+                      .filter(d => d.employee_count > 0)
+                      .sort((a, b) => b.employee_count - a.employee_count)
+                      .map(d => {
+                        const activeRate = d.employee_count > 0
+                          ? Math.round((d.active_count / d.employee_count) * 100)
+                          : 0
+                        return (
+                          <div key={d.id}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="min-w-0">
+                                <span className="text-sm font-medium truncate block">{d.name}</span>
+                                <span className="text-xs text-muted-foreground">{d.code}</span>
+                              </div>
+                              <div className="flex items-center gap-2 ml-2 shrink-0">
+                                <span className="text-xs text-muted-foreground">{d.active_count}/{d.employee_count}</span>
+                                {parseFloat(d.totalPayroll) > 0 && (
+                                  <span className="text-xs text-muted-foreground">{money(d.totalPayroll)}</span>
+                                )}
                               </div>
                             </div>
-                          ))}
+                            <div className="w-full bg-muted rounded-full h-1.5">
+                              <div
+                                className="bg-primary rounded-full h-1.5 transition-all"
+                                style={{ width: `${activeRate}%` }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── Leave Types Summary ──────────────────────────────────── */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" /> Leave Balances
+                </CardTitle>
+                <CardDescription>Year {leaveSummary?.year} · leave type utilization</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!leaveSummary || leaveSummary.leaveTypes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No leave data</p>
+                ) : (
+                  <div className="space-y-3">
+                    {leaveSummary.leaveTypes
+                      .filter(lt => parseFloat(lt.total_allocated) > 0)
+                      .map((lt, i) => {
+                        const allocated = parseFloat(lt.total_allocated)
+                        const used = parseFloat(lt.total_used)
+                        const pending = parseFloat(lt.total_pending)
+                        const usedPct = allocated > 0 ? Math.round((used / allocated) * 100) : 0
+                        return (
+                          <div key={i}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div>
+                                <span className="text-sm font-medium">{lt.leave_type}</span>
+                                {!lt.is_paid && (
+                                  <Badge variant="outline" className="text-xs ml-2">Unpaid</Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground text-right">
+                                <span className="text-foreground font-medium">{used}</span>/{allocated} days
+                                {pending > 0 && <span className="text-orange-500 ml-1">+{pending} pending</span>}
+                              </div>
+                            </div>
+                            <div className="w-full bg-muted rounded-full h-1.5">
+                              <div
+                                className={`rounded-full h-1.5 transition-all ${usedPct >= 80 ? 'bg-red-500' : usedPct >= 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                                style={{ width: `${Math.min(usedPct, 100)}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">{lt.employees_with_balance} employees with balance</p>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Attendance Trend ─────────────────────────────────────────── */}
+          {attendanceTrend.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" /> Attendance Trend
+                </CardTitle>
+                <CardDescription>Daily breakdown — last {attendanceTrend.length} days</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {attendanceTrend.slice(-10).map((point, i) => {
+                    const rate = point.total > 0 ? Math.round((point.present / point.total) * 100) : 0
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground w-20 shrink-0">{point.date}</span>
+                        <div className="flex-1 bg-muted rounded-full h-5 relative overflow-hidden">
+                          <div
+                            className={`rounded-full h-5 transition-all flex items-center justify-end pr-2 ${
+                              rate >= 90 ? 'bg-green-500' : rate >= 70 ? 'bg-yellow-500' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.max(rate, 6)}%` }}
+                          >
+                            <span className="text-[10px] text-white font-medium">{rate}%</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 text-xs text-muted-foreground w-32 shrink-0">
+                          <span className="text-green-600">✓{point.present}</span>
+                          {point.absent > 0 && <span className="text-red-500">✗{point.absent}</span>}
+                          {point.late > 0 && <span className="text-yellow-600">⏱{point.late}</span>}
+                          <span className="text-muted-foreground">/{point.total}</span>
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
+                    )
+                  })}
+                </div>
               </CardContent>
             </Card>
-          </div>
+          )}
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* ── Headcount Trend ──────────────────────────────────────── */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" /> Headcount Trend
-                </CardTitle>
-                <CardDescription>Last {recentHeadcount.length} months</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {recentHeadcount.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">No trend data</p>
-                ) : (
-                  <div className="space-y-2">
-                    {(() => {
-                      const max = Math.max(...recentHeadcount.map(p => p.count), 1)
-                      return recentHeadcount.map((point, i) => (
-                        <div key={i} className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground w-14 shrink-0">{point.month}</span>
-                          <div className="flex-1 bg-muted rounded-full h-5 relative overflow-hidden">
-                            <div
-                              className="bg-primary rounded-full h-5 transition-all flex items-center justify-end pr-2"
-                              style={{ width: `${Math.max((point.count / max) * 100, 8)}%` }}
-                            >
-                              <span className="text-[10px] text-primary-foreground font-medium">{point.count}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    })()}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* ── Attendance Trend ─────────────────────────────────────── */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserCheck className="h-4 w-4" /> Attendance Trend
-                </CardTitle>
-                <CardDescription>
-                  {attendanceRate !== null ? `Latest rate: ${attendanceRate}%` : 'Recent attendance'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {attendanceTrend.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">No attendance data</p>
-                ) : (
-                  <div className="space-y-2">
-                    {attendanceTrend.slice(-6).map((point, i) => {
-                      const total = point.present + point.absent + (point.onLeave ?? 0)
-                      const rate = total > 0 ? Math.round((point.present / total) * 100) : 0
-                      return (
-                        <div key={i} className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground w-20 shrink-0">{point.date}</span>
-                          <div className="flex-1 bg-muted rounded-full h-5 relative overflow-hidden">
-                            <div
-                              className="bg-green-500 rounded-full h-5 transition-all flex items-center justify-end pr-2"
-                              style={{ width: `${Math.max(rate, 8)}%` }}
-                            >
-                              <span className="text-[10px] text-white font-medium">{rate}%</span>
-                            </div>
-                          </div>
-                          <div className="flex gap-1 text-xs text-muted-foreground w-20 shrink-0">
-                            <span className="text-green-600">{point.present}✓</span>
-                            {point.absent > 0 && <span className="text-red-500">{point.absent}✗</span>}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ── Quick Links ─────────────────────────────────────────────── */}
+          {/* ── Quick Links ──────────────────────────────────────────────── */}
           <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader>
             <CardContent>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[

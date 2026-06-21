@@ -1,4 +1,4 @@
-import { api } from './api-client'
+import { api, toPaginated } from './api-client'
 
 function toArray<T>(raw: unknown): T[] {
   if (!raw) return []
@@ -109,22 +109,151 @@ export interface LeaveBalanceSummary {
   leaveTypes: LeaveTypeBalance[]
 }
 
+// ── Departments ───────────────────────────────────────────────────────────────
+
+export interface Department {
+  id: string
+  name: string
+  code: string
+  description?: string
+  head_of_department_id?: string | null
+  head_name?: string | null
+  is_active: boolean
+  sort_order?: number
+  created_at: string
+  updated_at?: string | null
+}
+
+export interface CreateDepartmentRequest {
+  name: string
+  code: string
+  description?: string
+  headOfDepartmentId?: string
+  sortOrder?: number
+}
+
+
+// ── Designations ──────────────────────────────────────────────────────────────
+
+export interface Designation {
+  id: string
+  name: string
+  code: string
+  departmentId?: string
+  departmentName?: string
+  description?: string
+  level?: string
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface CreateDesignationRequest {
+  name: string
+  code: string
+  departmentId?: string
+  description?: string
+  level?: string
+}
+
 // ── Employees ─────────────────────────────────────────────────────────────────
+
+export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'TEMPORARY'
+export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE' | 'TERMINATED' | 'RESIGNED'
+export type Gender = 'MALE' | 'FEMALE' | 'OTHER'
+
+function normalizeEmployee(raw: Record<string, unknown>): Employee {
+  return {
+    id: raw.id as string,
+    employeeCode: (raw.employee_code ?? raw.employeeCode) as string | undefined,
+    firstName: (raw.first_name ?? raw.firstName) as string,
+    lastName: (raw.last_name ?? raw.lastName) as string,
+    fullName: (raw.full_name ?? raw.fullName) as string | undefined,
+    email: raw.email as string,
+    phone: (raw.phone as string | null) ?? undefined,
+    gender: (raw.gender as Gender) ?? undefined,
+    dateOfBirth: (raw.date_of_birth ?? raw.dateOfBirth) as string | undefined,
+    nationality: raw.nationality as string | undefined,
+    cnicOrPassport: (raw.cnic_or_passport ?? raw.cnicOrPassport) as string | undefined,
+    address: raw.address as string | undefined,
+    departmentId: (raw.department_id ?? raw.departmentId) as string | undefined,
+    departmentName: (raw.department_name ?? raw.departmentName) as string | undefined,
+    designationId: (raw.designation_id ?? raw.designationId) as string | undefined,
+    designationName: (raw.designation_name ?? raw.designationName) as string | undefined,
+    employmentType: (raw.employment_type ?? raw.employmentType) as EmploymentType | undefined,
+    joiningDate: (raw.joining_date ?? raw.joiningDate) as string | undefined,
+    contractEndDate: (raw.contract_end_date ?? raw.contractEndDate) as string | undefined,
+    probationEndDate: (raw.probation_end_date ?? raw.probationEndDate) as string | undefined,
+    status: (raw.status as EmployeeStatus),
+    profilePicture: (raw.profile_picture_url ?? raw.profilePicture) as string | undefined,
+    emergencyContactName: (raw.emergency_contact_name ?? raw.emergencyContactName) as string | undefined,
+    emergencyContactPhone: (raw.emergency_contact_phone ?? raw.emergencyContactPhone) as string | undefined,
+    emergencyContactRelation: (raw.emergency_contact_relation ?? raw.emergencyContactRelation) as string | undefined,
+    bankAccountNumber: (raw.bank_account_number ?? raw.bankAccountNumber) as string | undefined,
+    bankName: (raw.bank_name ?? raw.bankName) as string | undefined,
+    notes: raw.notes as string | undefined,
+    userId: (raw.user_id ?? raw.userId) as string | undefined,
+    createdAt: (raw.created_at ?? raw.createdAt) as string,
+    updatedAt: (raw.updated_at ?? raw.updatedAt) as string | undefined,
+  }
+}
 
 export interface Employee {
   id: string
-  employeeCode: string
-  fullName: string
+  employeeCode?: string
+  firstName: string
+  lastName: string
+  fullName?: string
   email: string
   phone?: string
-  department?: string
-  designation?: string
+  gender?: Gender
+  dateOfBirth?: string
+  nationality?: string
+  cnicOrPassport?: string
+  address?: string
+  departmentId?: string
+  departmentName?: string
+  designationId?: string
+  designationName?: string
+  employmentType?: EmploymentType
   joiningDate?: string
-  salary?: number
-  status: 'active' | 'inactive' | 'on_leave' | 'terminated'
-  isActive: boolean
+  contractEndDate?: string
+  probationEndDate?: string
+  status: EmployeeStatus
+  profilePicture?: string
+  emergencyContactName?: string
+  emergencyContactPhone?: string
+  emergencyContactRelation?: string
+  bankAccountNumber?: string
+  bankName?: string
+  notes?: string
+  userId?: string
   createdAt: string
   updatedAt?: string
+}
+
+export interface CreateEmployeeRequest {
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  gender?: Gender
+  dateOfBirth?: string
+  nationality?: string
+  cnicOrPassport?: string
+  address?: string
+  departmentId?: string
+  designationId?: string
+  employmentType?: EmploymentType
+  joiningDate?: string
+  contractEndDate?: string
+  probationEndDate?: string
+  emergencyContactName?: string
+  emergencyContactPhone?: string
+  emergencyContactRelation?: string
+  bankAccountNumber?: string
+  bankName?: string
+  notes?: string
+  userId?: string
 }
 
 export interface Paginated<T> {
@@ -177,16 +306,77 @@ export interface JobOpening {
 export interface PayrollRecord {
   id: string
   employeeId: string
+  employeeCode?: string
   employeeName?: string
-  department?: string
-  month: string
-  basicSalary: string
-  allowances?: string
-  deductions?: string
-  netSalary: string
-  status: 'DRAFT' | 'APPROVED' | 'PAID'
-  paidAt?: string
+  departmentName?: string
+  effectiveDate: string
+  basicSalary: number
+  grossSalary: number
+  allowances: Record<string, number>
+  deductions: Record<string, number>
+  netSalary: number
+  currency: string
+  isActive: boolean
+  postedToFinanceAt?: string
+  journalEntryId?: string
   createdAt: string
+  updatedAt?: string
+}
+
+export interface CreatePayrollRequest {
+  employeeId: string
+  effectiveDate: string
+  basicSalary: number
+  allowances: Record<string, number>
+  deductions: Record<string, number>
+  currency: string
+}
+
+export interface PayrollSummary {
+  totalEmployees: number
+  totalBasicSalary: number
+  totalAllowances: number
+  totalDeductions: number
+  totalNetSalary: number
+  byStatus: Record<string, { count: number; totalNet: number }>
+  currency: string
+}
+
+function normalizePayrollRecord(raw: Record<string, unknown>): PayrollRecord {
+  const toNum = (v: unknown) => (v == null ? 0 : parseFloat(String(v)) || 0)
+  const toObj = (v: unknown): Record<string, number> => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {}
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map(([k, val]) => [k, toNum(val)])
+    )
+  }
+  const firstName = (raw.first_name ?? raw.firstName ?? '') as string
+  const lastName = (raw.last_name ?? raw.lastName ?? '') as string
+  const employeeName = [firstName, lastName].filter(Boolean).join(' ') || undefined
+  const allowances = toObj(raw.allowances)
+  const deductions = toObj(raw.deductions)
+  const basic = toNum(raw.basic_salary ?? raw.basicSalary)
+  const gross = toNum(raw.gross_salary ?? raw.grossSalary)
+  const net = toNum(raw.net_salary ?? raw.netSalary)
+  return {
+    id: raw.id as string,
+    employeeId: (raw.employee_id ?? raw.employeeId) as string,
+    employeeCode: (raw.employee_code ?? raw.employeeCode) as string | undefined,
+    employeeName,
+    departmentName: (raw.department_name ?? raw.departmentName) as string | undefined,
+    effectiveDate: (raw.effective_date ?? raw.effectiveDate) as string,
+    basicSalary: basic,
+    grossSalary: gross || basic,
+    allowances,
+    deductions,
+    netSalary: net,
+    currency: (raw.currency as string) || 'PKR',
+    isActive: Boolean(raw.is_active ?? raw.isActive),
+    postedToFinanceAt: (raw.posted_to_finance_at ?? raw.postedToFinanceAt) as string | undefined,
+    journalEntryId: (raw.journal_entry_id ?? raw.journalEntryId) as string | undefined,
+    createdAt: (raw.created_at ?? raw.createdAt) as string,
+    updatedAt: (raw.updated_at ?? raw.updatedAt) as string | undefined,
+  }
 }
 
 export const hrService = {
@@ -224,47 +414,56 @@ export const hrService = {
 
   // ── Employees ──────────────────────────────────────────────────────────────
 
-  async getEmployees(params: { page?: number; limit?: number; search?: string; department?: string; status?: string } = {}): Promise<Paginated<Employee>> {
+  async getEmployees(params: { page?: number; limit?: number; search?: string; departmentId?: string; status?: EmployeeStatus; employmentType?: EmploymentType } = {}): Promise<Paginated<Employee>> {
     const q = new URLSearchParams()
     if (params.page) q.set('page', String(params.page))
     if (params.limit) q.set('limit', String(params.limit))
     if (params.search) q.set('search', params.search)
-    if (params.department) q.set('department', params.department)
+    if (params.departmentId) q.set('departmentId', params.departmentId)
     if (params.status) q.set('status', params.status)
+    if (params.employmentType) q.set('employmentType', params.employmentType)
     const qs = q.toString()
-    const { data, error } = await api.get<Paginated<Employee>>(`/hr/employees${qs ? `?${qs}` : ''}`)
+    const { data, error } = await api.get<unknown>(`/hr/employees${qs ? `?${qs}` : ''}`)
     if (error) throw new Error(error)
-    const raw = data as unknown
-    if (Array.isArray(raw)) return { data: raw as Employee[], total: (raw as Employee[]).length, page: 1, limit: 200 }
-    const p = raw as Paginated<Employee>
-    return p || { data: [], total: 0, page: 1, limit: 20 }
+    const paginated = toPaginated<Record<string, unknown>>(data)
+    return { ...paginated, data: paginated.data.map(normalizeEmployee) }
   },
 
   async getEmployeeById(id: string): Promise<Employee | null> {
-    const { data } = await api.get<Employee>(`/hr/employees/${id}`)
-    return data || null
+    const { data, error } = await api.get<Record<string, unknown>>(`/hr/employees/${id}`)
+    if (error) throw new Error(error)
+    return data ? normalizeEmployee(data) : null
   },
 
-  async createEmployee(payload: {
-    fullName: string; email: string; phone?: string; department?: string
-    designation?: string; joiningDate?: string; salary?: number; employeeCode?: string
-  }): Promise<{ employee: Employee | null; error?: string }> {
-    const { data, error } = await api.post<Employee>('/hr/employees', payload)
+  async createEmployee(payload: CreateEmployeeRequest): Promise<{ employee: Employee | null; error?: string }> {
+    const { data, error } = await api.post<Record<string, unknown>>('/hr/employees', payload)
     if (error || !data) return { employee: null, error: error || 'Failed to create employee' }
-    return { employee: data }
+    return { employee: normalizeEmployee(data) }
   },
 
-  async updateEmployee(id: string, payload: Partial<{
-    fullName: string; phone: string; department: string; designation: string
-    joiningDate: string; salary: number; status: string; isActive: boolean
-  }>): Promise<{ employee: Employee | null; error?: string }> {
-    const { data, error } = await api.patch<Employee>(`/hr/employees/${id}`, payload)
+  async updateEmployee(id: string, payload: Partial<CreateEmployeeRequest>): Promise<{ employee: Employee | null; error?: string }> {
+    const { data, error } = await api.patch<Record<string, unknown>>(`/hr/employees/${id}`, payload)
     if (error || !data) return { employee: null, error: error || 'Failed to update employee' }
-    return { employee: data }
+    return { employee: normalizeEmployee(data) }
+  },
+
+  async updateEmployeeStatus(id: string, status: EmployeeStatus, reason?: string): Promise<boolean> {
+    const { error } = await api.patch(`/hr/employees/${id}/status`, { status, reason })
+    return !error
   },
 
   async deleteEmployee(id: string): Promise<boolean> {
     const { error } = await api.delete(`/hr/employees/${id}`)
+    return !error
+  },
+
+  async linkEmployeeUser(id: string, userId: string): Promise<boolean> {
+    const { error } = await api.post(`/hr/employees/${id}/link-user`, { userId })
+    return !error
+  },
+
+  async updateProfilePicture(id: string, url: string): Promise<boolean> {
+    const { error } = await api.patch(`/hr/employees/${id}/profile-picture`, { url })
     return !error
   },
 
@@ -335,18 +534,119 @@ export const hrService = {
 
   // ── Payroll ────────────────────────────────────────────────────────────────
 
-  async getPayroll(params: { page?: number; limit?: number; month?: string; status?: string } = {}): Promise<Paginated<PayrollRecord>> {
+  async getPayroll(params: { page?: number; limit?: number; employeeId?: string; status?: string } = {}): Promise<Paginated<PayrollRecord>> {
     const q = new URLSearchParams()
     if (params.page) q.set('page', String(params.page))
     if (params.limit) q.set('limit', String(params.limit))
-    if (params.month) q.set('month', params.month)
+    if (params.employeeId) q.set('employeeId', params.employeeId)
     if (params.status) q.set('status', params.status)
     const qs = q.toString()
     const { data, error } = await api.get<unknown>(`/hr/payroll${qs ? `?${qs}` : ''}`)
     if (error) throw new Error(error)
-    const raw = data as unknown
-    if (Array.isArray(raw)) return { data: raw as PayrollRecord[], total: (raw as PayrollRecord[]).length, page: 1, limit: 200 }
-    const p = raw as Paginated<PayrollRecord>
+    const paginated = toPaginated<Record<string, unknown>>(data)
+    return { ...paginated, data: paginated.data.map(normalizePayrollRecord) }
+  },
+
+  async createPayroll(payload: CreatePayrollRequest): Promise<{ record: PayrollRecord | null; error?: string }> {
+    const { data, error } = await api.post<Record<string, unknown>>('/hr/payroll', payload)
+    if (error || !data) return { record: null, error: error || 'Failed to create payroll record' }
+    return { record: normalizePayrollRecord(data) }
+  },
+
+  async getPayrollSummary(): Promise<PayrollSummary | null> {
+    const { data, error } = await api.get<Record<string, unknown>>('/hr/payroll/summary')
+    if (error) throw new Error(error)
+    if (!data) return null
+    const toNum = (v: unknown) => parseFloat(String(v ?? 0)) || 0
+    return {
+      totalEmployees: toNum(data.total_employees ?? data.totalEmployees),
+      totalBasicSalary: toNum(data.total_basic_salary ?? data.totalBasicSalary),
+      totalAllowances: toNum(data.total_allowances ?? data.totalAllowances),
+      totalDeductions: toNum(data.total_deductions ?? data.totalDeductions),
+      totalNetSalary: toNum(data.total_net_salary ?? data.totalNetSalary),
+      byStatus: (data.by_status ?? data.byStatus ?? {}) as Record<string, { count: number; totalNet: number }>,
+      currency: (data.currency as string) || 'PKR',
+    }
+  },
+
+  async getPayrollById(id: string): Promise<PayrollRecord | null> {
+    const { data, error } = await api.get<Record<string, unknown>>(`/hr/payroll/${id}`)
+    if (error) throw new Error(error)
+    return data ? normalizePayrollRecord(data) : null
+  },
+
+  // ── Departments ──────────────────────────────────────────────────────────────
+
+  async getDepartments(params: { page?: number; limit?: number; search?: string } = {}): Promise<Paginated<Department>> {
+    const q = new URLSearchParams()
+    if (params.page) q.set('page', String(params.page))
+    if (params.limit) q.set('limit', String(params.limit))
+    if (params.search) q.set('search', params.search)
+    const qs = q.toString()
+    const { data, error } = await api.get<unknown>(`/hr/departments${qs ? `?${qs}` : ''}`)
+    if (error) throw new Error(error)
+    return toPaginated<Department>(data)
+  },
+
+  async getDepartmentById(id: string): Promise<Department | null> {
+    const { data, error } = await api.get<Department>(`/hr/departments/${id}`)
+    if (error) throw new Error(error)
+    return data || null
+  },
+
+  async createDepartment(payload: CreateDepartmentRequest): Promise<{ department: Department | null; error?: string }> {
+    const { data, error } = await api.post<Department>('/hr/departments', payload)
+    if (error || !data) return { department: null, error: error || 'Failed to create department' }
+    return { department: data }
+  },
+
+  async updateDepartment(id: string, payload: Partial<CreateDepartmentRequest>): Promise<{ department: Department | null; error?: string }> {
+    const { data, error } = await api.patch<Department>(`/hr/departments/${id}`, payload)
+    if (error || !data) return { department: null, error: error || 'Failed to update department' }
+    return { department: data }
+  },
+
+  async deleteDepartment(id: string): Promise<boolean> {
+    const { error } = await api.delete(`/hr/departments/${id}`)
+    return !error
+  },
+
+  // ── Designations ─────────────────────────────────────────────────────────────
+
+  async getDesignations(params: { page?: number; limit?: number; search?: string; departmentId?: string } = {}): Promise<Paginated<Designation>> {
+    const q = new URLSearchParams()
+    if (params.page) q.set('page', String(params.page))
+    if (params.limit) q.set('limit', String(params.limit))
+    if (params.search) q.set('search', params.search)
+    if (params.departmentId) q.set('departmentId', params.departmentId)
+    const qs = q.toString()
+    const { data, error } = await api.get<unknown>(`/hr/designations${qs ? `?${qs}` : ''}`)
+    if (error) throw new Error(error)
+    if (Array.isArray(data)) return { data: data as Designation[], total: (data as Designation[]).length, page: 1, limit: 200 }
+    const p = data as Paginated<Designation>
     return p || { data: [], total: 0, page: 1, limit: 20 }
+  },
+
+  async getDesignationById(id: string): Promise<Designation | null> {
+    const { data, error } = await api.get<Designation>(`/hr/designations/${id}`)
+    if (error) throw new Error(error)
+    return data || null
+  },
+
+  async createDesignation(payload: CreateDesignationRequest): Promise<{ designation: Designation | null; error?: string }> {
+    const { data, error } = await api.post<Designation>('/hr/designations', payload)
+    if (error || !data) return { designation: null, error: error || 'Failed to create designation' }
+    return { designation: data }
+  },
+
+  async updateDesignation(id: string, payload: Partial<CreateDesignationRequest>): Promise<{ designation: Designation | null; error?: string }> {
+    const { data, error } = await api.patch<Designation>(`/hr/designations/${id}`, payload)
+    if (error || !data) return { designation: null, error: error || 'Failed to update designation' }
+    return { designation: data }
+  },
+
+  async deleteDesignation(id: string): Promise<boolean> {
+    const { error } = await api.delete(`/hr/designations/${id}`)
+    return !error
   },
 }

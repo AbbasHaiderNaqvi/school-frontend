@@ -1,386 +1,480 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
-import { hrService } from '@/lib/services/hr'
-import { attendanceManagerService } from '@/lib/services/attendance-manager'
-import { financeService } from '@/lib/services/finance'
-import { storage, STORAGE_KEYS } from '@/lib/services/storage'
-import { generateId } from '@/lib/utils'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { DollarSign, Calendar, Users, Download, CheckCircle, XCircle } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import { hrService } from '@/lib/services/hr'
+import type { PayrollRecord, PayrollSummary, Employee } from '@/lib/services/hr'
+import { DEFAULT_CURRENCY, money, fmt } from '@/lib/currency'
+import { Plus, Trash2, Loader2, RefreshCw, DollarSign, Users, CheckCircle, BookCheck } from 'lucide-react'
 
-interface PayrollRecord {
-  id: string
-  tenantId: string
-  employeeId: string
-  employeeName: string
-  month: string
-  year: number
-  basicSalary: number
-  allowances: number
-  deductions: number
-  workingDays: number
-  presentDays: number
-  leaveDays: number
-  netSalary: number
-  status: 'draft' | 'approved' | 'paid'
-  generatedBy: string
-  generatedAt: string
-  approvedBy?: string
-  approvedAt?: string
-  paidAt?: string
+function recordStatus(r: PayrollRecord): { label: string; cls: string } {
+  if (r.isActive) return { label: 'Active', cls: 'bg-green-100 text-green-800' }
+  if (r.postedToFinanceAt) return { label: 'Posted', cls: 'bg-blue-100 text-blue-800' }
+  return { label: 'Inactive', cls: 'bg-gray-100 text-gray-600' }
+}
+
+type KVRow = { key: string; value: string }
+
+const EMPTY_FORM = {
+  employeeId: '',
+  effectiveDate: '',
+  basicSalary: '',
+  allowances: [{ key: 'houseRent', value: '' }, { key: 'transport', value: '' }] as KVRow[],
+  deductions: [{ key: 'providentFund', value: '' }, { key: 'incomeTax', value: '' }] as KVRow[],
+}
+
+function sumKV(rows: KVRow[]) {
+  return rows.reduce((s, r) => s + (parseFloat(r.value) || 0), 0)
+}
+
+function toRecord(rows: KVRow[]): Record<string, number> {
+  return Object.fromEntries(
+    rows.filter(r => r.key.trim() && parseFloat(r.value) > 0)
+        .map(r => [r.key.trim(), parseFloat(r.value)])
+  )
+}
+
+function kvLabel(key: string) {
+  return key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()
 }
 
 export default function PayrollPage() {
-  const { user } = useAuth()
-  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([])
-  const [employees, setEmployees] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [showGenerateDialog, setShowGenerateDialog] = useState(false)
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const { can } = useAuth()
+
+  const [records, setRecords] = useState<PayrollRecord[]>([])
+  const [total, setTotal] = useState(0)
+  const [summary, setSummary] = useState<PayrollSummary | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  const [employees, setEmployees] = useState<Employee[]>([])
+
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [form, setForm] = useState(EMPTY_FORM)
+
+  const [detailRecord, setDetailRecord] = useState<PayrollRecord | null>(null)
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError('')
+    try {
+      const [result, sum] = await Promise.all([
+        hrService.getPayroll({ limit: 200 }),
+        hrService.getPayrollSummary().catch(() => null),
+      ])
+      setRecords(result.data)
+      setTotal(result.total)
+      setSummary(sum)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load payroll records.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    if (user?.tenantId) {
-      loadData()
-    }
-  }, [user])
+    hrService.getEmployees({ limit: 500 }).then(r => setEmployees(r.data)).catch(() => {})
+  }, [])
 
-  const loadData = async () => {
-    if (!user?.tenantId) return
+  useEffect(() => { loadData() }, [loadData])
+
+  if (!can('hr.payroll.read')) return <AccessDenied />
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM)
+    setSubmitError('')
+    setDialogOpen(true)
+  }
+
+  const setKV = (
+    section: 'allowances' | 'deductions',
+    idx: number,
+    field: 'key' | 'value',
+    val: string
+  ) => {
+    setForm(f => {
+      const rows = [...f[section]]
+      rows[idx] = { ...rows[idx], [field]: val }
+      return { ...f, [section]: rows }
+    })
+  }
+
+  const addKV = (section: 'allowances' | 'deductions') =>
+    setForm(f => ({ ...f, [section]: [...f[section], { key: '', value: '' }] }))
+
+  const removeKV = (section: 'allowances' | 'deductions', idx: number) =>
+    setForm(f => ({ ...f, [section]: f[section].filter((_, i) => i !== idx) }))
+
+  const previewNet =
+    (parseFloat(form.basicSalary) || 0) + sumKV(form.allowances) - sumKV(form.deductions)
+
+  const handleSave = async () => {
+    if (!form.employeeId || !form.effectiveDate || !form.basicSalary) return
+    setIsSubmitting(true)
+    setSubmitError('')
+    const result = await hrService.createPayroll({
+      employeeId: form.employeeId,
+      effectiveDate: form.effectiveDate,
+      basicSalary: parseFloat(form.basicSalary),
+      allowances: toRecord(form.allowances),
+      deductions: toRecord(form.deductions),
+      currency: DEFAULT_CURRENCY.code,
+    })
+    if (result.error || !result.record) {
+      setSubmitError(result.error || 'Operation failed')
+      setIsSubmitting(false)
+      return
+    }
+    setDialogOpen(false)
+    setIsSubmitting(false)
+    loadData()
+  }
+
+  const openDetail = async (r: PayrollRecord) => {
+    setDetailRecord(r)
+    setIsLoadingDetail(true)
     try {
-      setIsLoading(true)
-      const [empData, payrollData] = await Promise.all([
-        hrService.getEmployees(user.tenantId),
-        loadPayrollRecords(user.tenantId)
-      ])
-      setEmployees(empData.filter(e => e.status === 'active'))
-      setPayrollRecords(payrollData)
-    } catch (error) {
-      console.error('[v0] Error loading payroll data:', error)
+      const full = await hrService.getPayrollById(r.id)
+      if (full) setDetailRecord(full)
     } finally {
-      setIsLoading(false)
+      setIsLoadingDetail(false)
     }
   }
 
-  const loadPayrollRecords = async (tenantId: string): Promise<PayrollRecord[]> => {
-    const records = storage.get<PayrollRecord[]>(STORAGE_KEYS.PAYROLL_RECORDS) || []
-    return records.filter(r => r.tenantId === tenantId)
-  }
-
-  const generatePayroll = async () => {
-    if (!user?.tenantId) return
-    
-    try {
-      setIsLoading(true)
-      const newRecords: PayrollRecord[] = []
-
-      for (const employee of employees) {
-        // Get attendance data
-        const attendanceData = await attendanceManagerService.getEmployeeAttendance(
-          employee.id,
-          `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`,
-          `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${new Date(selectedYear, selectedMonth + 1, 0).getDate()}`
-        )
-
-        const presentDays = attendanceData.filter((a: any) => a.status === 'present').length
-        const leaveDays = attendanceData.filter((a: any) => a.status === 'leave').length
-        const workingDays = new Date(selectedYear, selectedMonth + 1, 0).getDate()
-
-        // Calculate salary
-        const dailySalary = employee.salary / 30
-        const earnedSalary = dailySalary * presentDays
-        const allowances = employee.allowances || 0
-        const deductions = employee.deductions || 0
-        const netSalary = earnedSalary + allowances - deductions
-
-        const record: PayrollRecord = {
-          id: generateId(),
-          tenantId: user.tenantId,
-          employeeId: employee.id,
-          employeeName: employee.name,
-          month: new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long' }),
-          year: selectedYear,
-          basicSalary: employee.salary,
-          allowances,
-          deductions,
-          workingDays,
-          presentDays,
-          leaveDays,
-          netSalary,
-          status: 'draft',
-          generatedBy: user.id,
-          generatedAt: new Date().toISOString()
-        }
-
-        newRecords.push(record)
-      }
-
-      const allRecords = storage.get<PayrollRecord[]>(STORAGE_KEYS.PAYROLL_RECORDS) || []
-      storage.set(STORAGE_KEYS.PAYROLL_RECORDS, [...allRecords, ...newRecords])
-      
-      await loadData()
-      setShowGenerateDialog(false)
-      alert(`Generated payroll for ${newRecords.length} employees`)
-    } catch (error) {
-      console.error('[v0] Error generating payroll:', error)
-      alert('Failed to generate payroll')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleApprove = async (recordId: string) => {
-    if (!user?.tenantId) return
-    
-    const allRecords = storage.get<PayrollRecord[]>(STORAGE_KEYS.PAYROLL_RECORDS) || []
-    const index = allRecords.findIndex(r => r.id === recordId)
-    
-    if (index !== -1) {
-      allRecords[index] = {
-        ...allRecords[index],
-        status: 'approved',
-        approvedBy: user.id,
-        approvedAt: new Date().toISOString()
-      }
-      storage.set(STORAGE_KEYS.PAYROLL_RECORDS, allRecords)
-      await loadData()
-    }
-  }
-
-  const handleMarkPaid = async (recordId: string) => {
-    if (!user?.tenantId) return
-    
-    const allRecords = storage.get<PayrollRecord[]>(STORAGE_KEYS.PAYROLL_RECORDS) || []
-    const index = allRecords.findIndex(r => r.id === recordId)
-    
-    if (index !== -1) {
-      const record = allRecords[index]
-      
-      // Create expense transaction
-      await financeService.createTransaction({
-        tenantId: user.tenantId,
-        type: 'expense',
-        accountId: 'salary-expense',
-        amount: record.netSalary,
-        description: `Salary payment for ${record.employeeName} - ${record.month} ${record.year}`,
-        date: new Date().toISOString(),
-        category: 'Salaries',
-        reference: `PAYROLL-${record.id}`,
-        createdBy: user.id,
-      })
-
-      allRecords[index] = {
-        ...allRecords[index],
-        status: 'paid',
-        paidAt: new Date().toISOString()
-      }
-      storage.set(STORAGE_KEYS.PAYROLL_RECORDS, allRecords)
-      await loadData()
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    const styles = {
-      draft: 'bg-gray-100 text-gray-800',
-      approved: 'bg-blue-100 text-blue-800',
-      paid: 'bg-green-100 text-green-800',
-    }
-    return styles[status as keyof typeof styles] || 'bg-gray-100 text-gray-800'
-  }
-
-  const totalDraft = payrollRecords.filter(r => r.status === 'draft').reduce((sum, r) => sum + r.netSalary, 0)
-  const totalApproved = payrollRecords.filter(r => r.status === 'approved').reduce((sum, r) => sum + r.netSalary, 0)
-  const totalPaid = payrollRecords.filter(r => r.status === 'paid').reduce((sum, r) => sum + r.netSalary, 0)
+  const activeRecords = records.filter(r => r.isActive)
+  const postedRecords = records.filter(r => r.postedToFinanceAt)
+  const totalBasic = summary?.totalBasicSalary ?? activeRecords.reduce((s, r) => s + r.basicSalary, 0)
+  const totalNet = summary?.totalNetSalary ?? activeRecords.reduce((s, r) => s + r.netSalary, 0)
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Payroll Management</h1>
-          <p className="text-muted-foreground">Generate and manage employee payroll</p>
-        </div>
-        <Button onClick={() => setShowGenerateDialog(true)}>
-          <Calendar className="mr-2 h-4 w-4" />
-          Generate Payroll
-        </Button>
-      </div>
+      <PageHeader
+        title="Payroll"
+        description="Manage employee salary structures"
+        action={
+          can('hr.payroll.create') && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button onClick={openCreate}>
+                <Plus className="mr-2 h-4 w-4" /> Add Salary Structure
+              </Button>
+            </div>
+          )
+        }
+      />
 
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Structures</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{employees.length}</div>
-            <p className="text-xs text-muted-foreground">Payroll active</p>
+            <div className="text-2xl font-bold">{total}</div>
+            <p className="text-xs text-muted-foreground">{activeRecords.length} active</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Draft</CardTitle>
-            <DollarSign className="h-4 w-4 text-gray-600" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Active Basic</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{totalDraft.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">{payrollRecords.filter(r => r.status === 'draft').length} records</p>
+            <div className="text-2xl font-bold">{money(totalBasic)}</div>
+            <p className="text-xs text-muted-foreground">active records only</p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approved</CardTitle>
-            <CheckCircle className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{totalApproved.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">{payrollRecords.filter(r => r.status === 'approved').length} records</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Paid</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Active Net</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{totalPaid.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">{payrollRecords.filter(r => r.status === 'paid').length} records</p>
+            <div className="text-2xl font-bold">{money(totalNet)}</div>
+            <p className="text-xs text-muted-foreground">active records only</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Posted to Finance</CardTitle>
+            <BookCheck className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{postedRecords.length}</div>
+            <p className="text-xs text-muted-foreground">journal entries created</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Payroll Records Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Payroll Records</CardTitle>
-          <CardDescription>View and manage salary payments</CardDescription>
+          <CardTitle>Salary Structures ({total})</CardTitle>
         </CardHeader>
         <CardContent>
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading payroll data...</div>
-          ) : payrollRecords.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No payroll records found. Generate payroll to get started.</div>
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Effective Date</TableHead>
+                  <TableHead className="text-right">Basic</TableHead>
+                  <TableHead className="text-right">Gross</TableHead>
+                  <TableHead className="text-right">Net Salary</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {records.length === 0 && (
                   <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Working Days</TableHead>
-                    <TableHead>Present Days</TableHead>
-                    <TableHead>Basic Salary</TableHead>
-                    <TableHead>Net Salary</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      No payroll records found.
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payrollRecords.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="font-medium">{record.employeeName}</TableCell>
-                      <TableCell>{record.month} {record.year}</TableCell>
-                      <TableCell>{record.workingDays}</TableCell>
-                      <TableCell>{record.presentDays}</TableCell>
-                      <TableCell>₹{record.basicSalary.toLocaleString()}</TableCell>
-                      <TableCell className="font-semibold">₹{record.netSalary.toLocaleString()}</TableCell>
+                )}
+                {records.map(r => {
+                  const st = recordStatus(r)
+                  return (
+                    <TableRow key={r.id} className={r.isActive ? '' : 'opacity-60'}>
                       <TableCell>
-                        <Badge className={getStatusBadge(record.status)}>
-                          {record.status}
-                        </Badge>
+                        <p className="font-medium text-sm">{r.employeeName ?? r.employeeId}</p>
+                        <p className="text-xs text-muted-foreground">{r.employeeCode}{r.departmentName ? ` · ${r.departmentName}` : ''}</p>
+                      </TableCell>
+                      <TableCell className="text-sm">{r.effectiveDate}</TableCell>
+                      <TableCell className="text-right text-sm">{money(r.basicSalary)}</TableCell>
+                      <TableCell className="text-right text-sm text-green-700">{money(r.grossSalary)}</TableCell>
+                      <TableCell className="text-right font-semibold text-sm">{money(r.netSalary)}</TableCell>
+                      <TableCell>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${st.cls}`}>
+                          {st.label}
+                        </span>
                       </TableCell>
                       <TableCell>
-                        {record.status === 'draft' && (
-                          <Button size="sm" variant="outline" onClick={() => handleApprove(record.id)}>
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                        )}
-                        {record.status === 'approved' && (
-                          <Button size="sm" onClick={() => handleMarkPaid(record.id)}>
-                            <DollarSign className="h-4 w-4 mr-1" />
-                            Mark Paid
-                          </Button>
-                        )}
-                        {record.status === 'paid' && (
-                          <span className="text-sm text-green-600">✓ Paid</span>
-                        )}
+                        <Button variant="ghost" size="sm" onClick={() => openDetail(r)}>
+                          Details
+                        </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  )
+                })}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
 
-      {/* Generate Payroll Dialog */}
-      <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
-        <DialogContent>
+      {/* Create Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Generate Payroll</DialogTitle>
-            <DialogDescription>Select month and year to generate payroll for all active employees</DialogDescription>
+            <DialogTitle>Add Salary Structure</DialogTitle>
+            <DialogDescription>Define basic salary, allowances, and deductions for an employee.</DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label>Month</Label>
-              <Select value={String(selectedMonth)} onValueChange={(value) => setSelectedMonth(Number(value))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <SelectItem key={i} value={String(i)}>
-                      {new Date(2024, i).toLocaleString('default', { month: 'long' })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {submitError && (
+            <Alert variant="destructive"><AlertDescription>{submitError}</AlertDescription></Alert>
+          )}
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label>Employee <span className="text-destructive">*</span></Label>
+                <Select value={form.employeeId || 'none'} onValueChange={v => setForm(f => ({ ...f, employeeId: v === 'none' ? '' : v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Select —</SelectItem>
+                    {employees.map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Effective Date <span className="text-destructive">*</span></Label>
+                <Input
+                  type="date"
+                  value={form.effectiveDate}
+                  onChange={e => setForm(f => ({ ...f, effectiveDate: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Basic Salary ({DEFAULT_CURRENCY.code}) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.basicSalary}
+                  onChange={e => setForm(f => ({ ...f, basicSalary: e.target.value }))}
+                  placeholder="e.g. 50000"
+                  className="mt-1"
+                />
+              </div>
             </div>
 
             <div>
-              <Label>Year</Label>
-              <Select value={String(selectedYear)} onValueChange={(value) => setSelectedYear(Number(value))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2024, 2025, 2026].map(year => (
-                    <SelectItem key={year} value={String(year)}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Allowances</h3>
+                <Button type="button" variant="ghost" size="sm" onClick={() => addKV('allowances')}>
+                  <Plus className="h-3 w-3 mr-1" /> Add
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {form.allowances.map((row, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      placeholder="Label (e.g. houseRent)"
+                      value={row.key}
+                      onChange={e => setKV('allowances', i, 'key', e.target.value)}
+                      className="flex-1"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="Amount"
+                      value={row.value}
+                      onChange={e => setKV('allowances', i, 'value', e.target.value)}
+                      className="w-32"
+                    />
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeKV('allowances', i)}>
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="text-sm text-muted-foreground">
-              This will generate payroll for {employees.length} active employees based on attendance records.
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Deductions</h3>
+                <Button type="button" variant="ghost" size="sm" onClick={() => addKV('deductions')}>
+                  <Plus className="h-3 w-3 mr-1" /> Add
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {form.deductions.map((row, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      placeholder="Label (e.g. providentFund)"
+                      value={row.key}
+                      onChange={e => setKV('deductions', i, 'key', e.target.value)}
+                      className="flex-1"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="Amount"
+                      value={row.value}
+                      onChange={e => setKV('deductions', i, 'value', e.target.value)}
+                      className="w-32"
+                    />
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeKV('deductions', i)}>
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="flex gap-2 pt-4">
-              <Button variant="outline" onClick={() => setShowGenerateDialog(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={generatePayroll} disabled={isLoading} className="flex-1">
-                {isLoading ? 'Generating...' : 'Generate Payroll'}
-              </Button>
+            <div className="rounded-lg bg-muted px-4 py-3 flex justify-between text-sm font-medium">
+              <span>Estimated Net Salary</span>
+              <span>{DEFAULT_CURRENCY.symbol} {fmt(previewNet)}</span>
             </div>
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSubmitting || !form.employeeId || !form.effectiveDate || !form.basicSalary}
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail Dialog */}
+      <Dialog open={!!detailRecord} onOpenChange={open => !open && setDetailRecord(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Salary Breakdown</DialogTitle>
+            <DialogDescription>
+              {detailRecord?.employeeName} — {detailRecord?.effectiveDate}
+            </DialogDescription>
+          </DialogHeader>
+          {isLoadingDetail ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : detailRecord && (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Basic Salary</span>
+                <span className="font-medium">{money(detailRecord.basicSalary)}</span>
+              </div>
+              {Object.entries(detailRecord.allowances).map(([k, v]) => (
+                <div key={k} className="flex justify-between text-green-700">
+                  <span>+ {kvLabel(k)}</span>
+                  <span>{money(v)}</span>
+                </div>
+              ))}
+              {Object.entries(detailRecord.deductions).map(([k, v]) => (
+                <div key={k} className="flex justify-between text-red-700">
+                  <span>- {kvLabel(k)}</span>
+                  <span>{money(v)}</span>
+                </div>
+              ))}
+              <div className="border-t pt-2 flex justify-between">
+                <span className="text-muted-foreground">Gross Salary</span>
+                <span className="text-green-700 font-medium">{money(detailRecord.grossSalary)}</span>
+              </div>
+              <div className="flex justify-between font-semibold">
+                <span>Net Salary</span>
+                <span>{money(detailRecord.netSalary)}</span>
+              </div>
+              <div className="border-t pt-2 flex justify-between text-muted-foreground text-xs">
+                <span>Status</span>
+                <span className={`font-medium px-2 py-0.5 rounded-full ${recordStatus(detailRecord).cls}`}>
+                  {recordStatus(detailRecord).label}
+                </span>
+              </div>
+              {detailRecord.postedToFinanceAt && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Posted to Finance</span>
+                  <span>{new Date(detailRecord.postedToFinanceAt).toLocaleDateString()}</span>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

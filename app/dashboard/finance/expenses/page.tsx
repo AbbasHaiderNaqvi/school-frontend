@@ -207,7 +207,7 @@ export default function ExpensesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Expenses</CardTitle>
+          <CardTitle>Expenses ({filtered.length})</CardTitle>
           <CardDescription>{filtered.length} expenses found</CardDescription>
         </CardHeader>
         <CardContent>

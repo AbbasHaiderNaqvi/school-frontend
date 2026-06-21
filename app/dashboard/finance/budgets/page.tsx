@@ -141,7 +141,7 @@ export default function BudgetsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Budgets</CardTitle>
+          <CardTitle>Budgets ({filtered.length})</CardTitle>
           <CardDescription>{filtered.length} budgets found</CardDescription>
         </CardHeader>
         <CardContent>

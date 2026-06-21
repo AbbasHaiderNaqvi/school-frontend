@@ -111,6 +111,8 @@ const navItems: NavItem[] = [
     children: [
       { title: 'Overview', href: '/dashboard/hr', icon: LayoutDashboard },
       { title: 'Employees', href: '/dashboard/hr/employees', icon: Users },
+      { title: 'Departments', href: '/dashboard/hr/departments', icon: Building2 },
+      { title: 'Designations', href: '/dashboard/hr/designations', icon: GraduationCap },
       { title: 'Payroll', href: '/dashboard/hr/payroll', icon: Wallet, roles: ['tenant_admin', 'tenant_accountant', 'hr', 'tenant_owner'] },
       { title: 'Job Openings', href: '/dashboard/hr/jobs', icon: Briefcase },
       { title: 'Leave Requests', href: '/dashboard/hr/leaves', icon: AlertCircle },
