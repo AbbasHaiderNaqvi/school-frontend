@@ -90,7 +90,10 @@ export const brandingService = {
         cache: 'no-store',
       })
       if (!res.ok) return null
-      return res.json()
+      const data: TenantBranding = await res.json()
+      if (data.logoUrl) data.logoUrl = `${PROXY}${data.logoUrl}`
+      if (data.faviconUrl) data.faviconUrl = `${PROXY}${data.faviconUrl}`
+      return data
     } catch {
       return null
     }

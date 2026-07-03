@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
+import { TenantFavicon } from '@/components/tenant-favicon'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -28,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} antialiased`} suppressHydrationWarning>
+        <TenantFavicon />
         <AuthProvider>
           {children}
         </AuthProvider>
