@@ -52,6 +52,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
+import { TablePageSkeleton } from '@/components/ui/page-skeleton'
 
 // Feature configuration with metadata
 const FEATURE_CONFIG: Record<keyof TenantFeatures, {
@@ -204,11 +205,7 @@ export default function FeatureFlagsPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    )
+    return <TablePageSkeleton />
   }
 
   return (

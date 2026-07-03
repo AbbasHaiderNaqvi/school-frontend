@@ -19,6 +19,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { AccessDenied } from '@/components/ui/access-denied'
+import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 import { feeService } from '@/lib/services/fee'
 import type { FeePayment, FeeInvoice, PaymentMethod } from '@/lib/services/fee'
 import {
@@ -147,12 +148,7 @@ export default function PaymentsPage() {
   if (!can('fees.payment.read')) return <AccessDenied />
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Payments" description="Record and manage fee payments" />
-        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-      </div>
-    )
+    return <OverviewPageSkeleton />
   }
 
   return (

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { tenantService, authService } from '@/lib/services'
+import { brandingService, type TenantBranding } from '@/lib/services/branding'
 import { currencyService, CURRENCIES } from '@/lib/utils/currency'
 import type { Tenant, TenantContactInfo } from '@/lib/types'
 import { PageHeader } from '@/components/layout/page-header'
@@ -15,6 +16,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Select,
   SelectContent,
@@ -33,7 +36,6 @@ import {
   Settings as SettingsIcon,
   Shield,
   Bell,
-  Palette,
   Save,
   Loader2,
   Upload,
@@ -41,15 +43,33 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Trash2,
+  ImageIcon,
+  CheckCircle2,
 } from 'lucide-react'
 
 export default function SettingsPage() {
   const { user, tenant, refreshTenant } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSavingDetails, setIsSavingDetails] = useState(false)
+  const [isSavingContact, setIsSavingContact] = useState(false)
+  const [isSavingBranding, setIsSavingBranding] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [activeTab, setActiveTab] = useState('profile')
+
+  // Branding state
+  const [branding, setBranding] = useState<TenantBranding | null>(null)
+  const [brandingDescription, setBrandingDescription] = useState('')
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [faviconFile, setFaviconFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [faviconPreview, setFaviconPreview] = useState<string | null>(null)
+  const [brandingSaved, setBrandingSaved] = useState(false)
+  const [brandingError, setBrandingError] = useState<string | null>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const faviconInputRef = useRef<HTMLInputElement>(null)
 
   // Profile state
   const [profileData, setProfileData] = useState({
@@ -128,9 +148,85 @@ export default function SettingsPage() {
         address: { street: '', city: '', state: '', country: '', postalCode: '' },
         googleMapsLink: '',
       })
-      setSettings(tenant.settings)
     }
   }, [user, tenant])
+
+  // Load branding on mount (tenant owner only)
+  useEffect(() => {
+    if (user?.role !== 'tenant_owner') return
+    brandingService.getBranding().then(data => {
+      if (data) {
+        setBranding(data)
+        setBrandingDescription(data.description || '')
+        if (data.logoUrl) setLogoPreview(data.logoUrl)
+        if (data.faviconUrl) setFaviconPreview(data.faviconUrl)
+      }
+    })
+  }, [user?.role])
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      setBrandingError('Logo must be under 2 MB.')
+      e.target.value = ''
+      return
+    }
+    setBrandingError(null)
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+  }
+
+  const handleFaviconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 256 * 1024) {
+      setBrandingError('Favicon must be under 256 KB.')
+      e.target.value = ''
+      return
+    }
+    setBrandingError(null)
+    setFaviconFile(file)
+    setFaviconPreview(URL.createObjectURL(file))
+  }
+
+  const handleDeleteLogo = async () => {
+    await brandingService.deleteLogo()
+    setLogoFile(null)
+    setLogoPreview(null)
+    setBranding(prev => prev ? { ...prev, logoUrl: null } : null)
+    if (logoInputRef.current) logoInputRef.current.value = ''
+  }
+
+  const handleDeleteFavicon = async () => {
+    await brandingService.deleteFavicon()
+    setFaviconFile(null)
+    setFaviconPreview(null)
+    setBranding(prev => prev ? { ...prev, faviconUrl: null } : null)
+    if (faviconInputRef.current) faviconInputRef.current.value = ''
+  }
+
+  const handleSaveBranding = async () => {
+    setIsSavingBranding(true)
+    setBrandingSaved(false)
+    setBrandingError(null)
+    const result = await brandingService.updateBranding({
+      description: brandingDescription,
+      logo: logoFile,
+      favicon: faviconFile,
+    })
+    if (result.success) {
+      setLogoFile(null)
+      setFaviconFile(null)
+      if (result.data?.logoUrl) setLogoPreview(result.data.logoUrl)
+      if (result.data?.faviconUrl) setFaviconPreview(result.data.faviconUrl)
+      setBrandingSaved(true)
+      setTimeout(() => setBrandingSaved(false), 3000)
+    } else {
+      setBrandingError(result.error || 'Failed to save branding.')
+    }
+    setIsSavingBranding(false)
+  }
 
   const handleSaveProfile = async () => {
     setIsSaving(true)
@@ -158,17 +254,24 @@ export default function SettingsPage() {
     alert('Password updated successfully')
   }
 
-  const handleSaveTenantDetails = async () => {
+  const handleSaveOrgDetails = async () => {
     if (!tenant) return
-    setIsSaving(true)
+    setIsSavingDetails(true)
     await tenantService.update(tenant.id, {
       name: tenantData.name,
       logo: tenantData.logo,
       subdomain: tenantData.subdomain,
     })
+    refreshTenant?.()
+    setIsSavingDetails(false)
+  }
+
+  const handleSaveContactInfo = async () => {
+    if (!tenant) return
+    setIsSavingContact(true)
     await tenantService.updateContactInfo(tenant.id, contactInfo)
     refreshTenant?.()
-    setIsSaving(false)
+    setIsSavingContact(false)
   }
 
   const handleSaveSettings = async () => {
@@ -180,6 +283,7 @@ export default function SettingsPage() {
   }
 
   const isAdmin = ['super_admin', 'tenant_owner', 'tenant_admin', 'tenant_principal'].includes(user?.role || '')
+  const isOwner = user?.role === 'tenant_owner'
 
   return (
     <div className="space-y-6">
@@ -382,45 +486,14 @@ export default function SettingsPage() {
         {/* Organization Tab (Admin only) */}
         {isAdmin && (
           <TabsContent value="organization" className="space-y-6">
+
+            {/* Organization Details */}
             <Card>
               <CardHeader>
                 <CardTitle>Organization Details</CardTitle>
-                <CardDescription>Update your school/organization information</CardDescription>
+                <CardDescription>Update your school name and subdomain</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center gap-6">
-                  <div className="h-24 w-24 rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center bg-muted/50">
-                    {tenantData.logo ? (
-                      <img src={tenantData.logo || "/placeholder.svg"} alt="Logo" className="h-20 w-20 object-contain" />
-                    ) : (
-                      <span className="text-3xl font-bold text-muted-foreground">
-                        {getInitials(tenantData.name || 'S')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="font-semibold text-foreground">{tenantData.name}</h3>
-                    <p className="text-sm text-muted-foreground">Organization Logo</p>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Logo
-                      </Button>
-                      {tenantData.logo && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => setTenantData(prev => ({ ...prev, logo: '' }))}
-                        >
-                          Remove
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
+              <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="org-name">Organization Name</Label>
@@ -435,19 +508,139 @@ export default function SettingsPage() {
                     <div className="flex">
                       <Input
                         id="subdomain"
-                        value={tenantData.subdomain}
-                        onChange={e => setTenantData(prev => ({ ...prev, subdomain: e.target.value }))}
-                        className="rounded-r-none"
+                        value={tenant?.slug || ''}
+                        disabled
+                        className="rounded-r-none bg-muted text-muted-foreground"
                       />
-                <span className="inline-flex items-center px-3 border border-l-0 rounded-r-md bg-muted text-muted-foreground text-sm">
-                  .mudir.com
-                </span>
+                      <span className="inline-flex items-center px-3 border border-l-0 rounded-r-md bg-muted text-muted-foreground text-sm">
+                        .muddir.com
+                      </span>
                     </div>
+                    <p className="text-xs text-muted-foreground">Subdomain cannot be changed</p>
                   </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={handleSaveOrgDetails} disabled={isSavingDetails}>
+                    {isSavingDetails && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Details
+                  </Button>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Branding — tenant owner only */}
+            {isOwner && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Branding</CardTitle>
+                  <CardDescription>Logo, favicon, and description shown on your public page</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+
+                  {/* Logo */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">School Logo</Label>
+                    <div className="flex items-start gap-6">
+                      <div className="h-20 w-20 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted/30 overflow-hidden flex-shrink-0">
+                        {logoPreview ? (
+                          <img src={logoPreview} alt="Logo" className="h-full w-full object-contain p-1" />
+                        ) : (
+                          <ImageIcon className="h-7 w-7 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">PNG or SVG, at least 256×256px, max 2 MB.</p>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>
+                            <Upload className="h-4 w-4 mr-2" />
+                            {logoPreview ? 'Replace' : 'Upload Logo'}
+                          </Button>
+                          {logoPreview && (
+                            <Button variant="ghost" size="sm" onClick={handleDeleteLogo}>
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                        <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+                        {logoFile && <p className="text-xs text-primary">{logoFile.name} — ready to save</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Favicon */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Favicon</Label>
+                    <div className="flex items-start gap-6">
+                      <div className="h-10 w-10 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30 overflow-hidden flex-shrink-0">
+                        {faviconPreview ? (
+                          <img src={faviconPreview} alt="Favicon" className="h-full w-full object-contain" />
+                        ) : (
+                          <Globe className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">ICO, PNG, or SVG at 32×32px, max 256 KB.</p>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => faviconInputRef.current?.click()}>
+                            <Upload className="h-4 w-4 mr-2" />
+                            {faviconPreview ? 'Replace' : 'Upload Favicon'}
+                          </Button>
+                          {faviconPreview && (
+                            <Button variant="ghost" size="sm" onClick={handleDeleteFavicon}>
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                        <input ref={faviconInputRef} type="file" accept="image/*,.ico" className="hidden" onChange={handleFaviconChange} />
+                        {faviconFile && <p className="text-xs text-primary">{faviconFile.name} — ready to save</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Description */}
+                  <div className="space-y-2">
+                    <Label htmlFor="org-branding-desc" className="text-sm font-medium">School Description</Label>
+                    <Textarea
+                      id="org-branding-desc"
+                      placeholder="A brief tagline shown on your public landing page…"
+                      value={brandingDescription}
+                      onChange={e => setBrandingDescription(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+
+                  {brandingError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{brandingError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {brandingSaved && (
+                    <Alert className="border-green-200 bg-green-50 text-green-800">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <AlertDescription>Branding saved successfully.</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex justify-end">
+                    <Button onClick={handleSaveBranding} disabled={isSavingBranding}>
+                      {isSavingBranding && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Branding
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Contact Information */}
             <Card>
               <CardHeader>
                 <CardTitle>Contact Information</CardTitle>
@@ -592,10 +785,10 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={handleSaveTenantDetails} disabled={isSaving}>
-                    {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  <Button onClick={handleSaveContactInfo} disabled={isSavingContact}>
+                    {isSavingContact && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     <Save className="h-4 w-4 mr-2" />
-                    Save Organization Details
+                    Save Contact Info
                   </Button>
                 </div>
               </CardContent>
@@ -616,7 +809,7 @@ export default function SettingsPage() {
                   <div className="space-y-2">
                     <Label htmlFor="academic-year">Academic Year</Label>
                     <Select
-                      value={settings.academicYear}
+                      value={settings?.academicYear}
                       onValueChange={value => setSettings(prev => ({ ...prev, academicYear: value }))}
                     >
                       <SelectTrigger>
@@ -632,7 +825,7 @@ export default function SettingsPage() {
                   <div className="space-y-2">
                     <Label htmlFor="timezone">Timezone</Label>
                     <Select
-                      value={settings.timezone}
+                      value={settings?.timezone}
                       onValueChange={value => setSettings(prev => ({ ...prev, timezone: value }))}
                     >
                       <SelectTrigger>
@@ -830,6 +1023,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+
       </Tabs>
     </div>
   )

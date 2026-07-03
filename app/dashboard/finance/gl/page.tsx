@@ -25,6 +25,7 @@ import {
 import { financeService } from '@/lib/services/finance'
 import type { GlAccount, GlAccountType } from '@/lib/services/finance'
 import { Plus, Search, Loader2, MoreHorizontal, Edit, Database } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 type NormalSide = 'DEBIT' | 'CREDIT'
 
@@ -194,50 +195,52 @@ export default function GeneralLedgerPage() {
       <Card>
         <CardHeader><CardTitle>Chart of Accounts ({filtered.length})</CardTitle></CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Normal Side</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                  <TableHead className="w-12" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No accounts found</TableCell></TableRow>
-                )}
-                {filtered.map(a => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-mono">{a.code}</TableCell>
-                    <TableCell className="font-medium">{a.name}</TableCell>
-                    <TableCell><Badge className={TYPE_COLORS[a.type]}>{a.type}</Badge></TableCell>
-                    <TableCell><Badge variant="outline">{a.normalSide}</Badge></TableCell>
-                    <TableCell><Badge variant={a.isActive ? 'default' : 'secondary'}>{a.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
-                    <TableCell className="text-right font-medium">{money(a.balance)}</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setEditingAccount({ ...a }); setSubmitError(''); setIsEditOpen(true) }}>
-                            <Edit className="h-4 w-4 mr-2" /> Edit
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Normal Side</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
+                <TableHead className="w-12" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={5} cols={7} />
+              ) : (
+                <>
+                  {filtered.length === 0 && (
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No accounts found</TableCell></TableRow>
+                  )}
+                  {filtered.map(a => (
+                    <TableRow key={a.id}>
+                      <TableCell className="font-mono">{a.code}</TableCell>
+                      <TableCell className="font-medium">{a.name}</TableCell>
+                      <TableCell><Badge className={TYPE_COLORS[a.type]}>{a.type}</Badge></TableCell>
+                      <TableCell><Badge variant="outline">{a.normalSide}</Badge></TableCell>
+                      <TableCell><Badge variant={a.isActive ? 'default' : 'secondary'}>{a.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
+                      <TableCell className="text-right font-medium">{money(a.balance)}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { setEditingAccount({ ...a }); setSubmitError(''); setIsEditOpen(true) }}>
+                              <Edit className="h-4 w-4 mr-2" /> Edit
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

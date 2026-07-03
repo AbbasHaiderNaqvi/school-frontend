@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CheckCircle2, XCircle, AlertTriangle, Loader2, Eye, RefreshCw } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -112,25 +113,27 @@ export default function ApprovalsPage() {
           <CardDescription>Expenses awaiting approval</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : expenses.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No pending approvals</p>
-          ) : (
-            <Table>
-              <TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Reference</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={5} cols={7} />
+              ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead />
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No pending approvals</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {expenses.map(exp => (
+              ) : (
+                expenses.map(exp => (
                   <TableRow key={exp.id}>
                     <TableCell className="font-mono text-sm">{exp.reference}</TableCell>
                     <TableCell>{exp.date}</TableCell>
@@ -150,10 +153,10 @@ export default function ApprovalsPage() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

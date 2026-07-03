@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
 import type { FinanceTransaction } from '@/lib/services/finance'
 import { CheckCircle, XCircle, Clock, DollarSign, AlertCircle, Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -143,7 +144,9 @@ export default function AccountsApprovalPage() {
             </Alert>
           )}
           {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
           ) : pending.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <AlertCircle className="h-10 w-10 mx-auto mb-2 opacity-40" />

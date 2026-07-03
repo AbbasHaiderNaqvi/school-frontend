@@ -14,7 +14,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, Filter } from 'lucide-react'
+import { Filter } from 'lucide-react'
+import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -74,9 +75,7 @@ export default function FinancialReportsPage() {
   const totalAllocated = budgets.reduce((s, b) => s + parseFloat(b.allocatedAmount), 0)
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-    )
+    return <OverviewPageSkeleton />
   }
 
   return (

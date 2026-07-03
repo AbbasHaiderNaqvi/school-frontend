@@ -25,6 +25,7 @@ import type { FeeStructure } from '@/lib/services/fee'
 import { academicsService } from '@/lib/services/academics'
 import type { AcademicClass } from '@/lib/services/academics'
 import { Plus, Edit, Trash2, Copy, FileText, DollarSign, Loader2 } from 'lucide-react'
+import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 
 type FormComponent = { id: string; name: string; amount: number; dueDate: string }
 
@@ -159,12 +160,7 @@ export default function FeeStructuresPage() {
   if (!can('fees.structure.read')) return <AccessDenied />
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Fee Structures" description="Manage fee templates for each class" />
-        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-      </div>
-    )
+    return <OverviewPageSkeleton />
   }
 
   return (

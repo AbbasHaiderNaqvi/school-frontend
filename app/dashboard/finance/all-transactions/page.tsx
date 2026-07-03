@@ -22,6 +22,7 @@ import {
 import { financeService } from '@/lib/services/finance'
 import type { FinanceTransaction, TransactionType, TransactionStatus, GlAccount } from '@/lib/services/finance'
 import { Search, TrendingDown, TrendingUp, DollarSign, AlertCircle, Loader2, Plus, RefreshCw } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -269,51 +270,49 @@ export default function AllTransactionsPage() {
             </Select>
           </div>
 
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <Table>
-              <TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Reference</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={5} cols={7} />
+              ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Reference</TableHead>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No transactions found</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No transactions found</TableCell>
+              ) : (
+                filtered.map(t => (
+                  <TableRow key={t.id}>
+                    <TableCell className="text-sm">{t.date}</TableCell>
+                    <TableCell><Badge className={TYPE_COLORS[t.type]}>{t.type}</Badge></TableCell>
+                    <TableCell className="font-medium">{t.description}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {t.categoryAccount?.name ?? t.fromAccount?.name ?? '—'}
+                      {t.toAccount && <span className="text-xs"> → {t.toAccount.name}</span>}
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      <span className={t.type === 'INCOME' ? 'text-green-600' : t.type === 'EXPENSE' ? 'text-red-600' : 'text-blue-600'}>
+                        {t.type === 'INCOME' ? '+' : t.type === 'EXPENSE' ? '-' : ''}{money(t.amount)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={STATUS_COLORS[t.status]}>{t.status.replace('_', ' ')}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground font-mono">{t.reference}</TableCell>
                   </TableRow>
-                ) : (
-                  filtered.map(t => (
-                    <TableRow key={t.id}>
-                      <TableCell className="text-sm">{t.date}</TableCell>
-                      <TableCell><Badge className={TYPE_COLORS[t.type]}>{t.type}</Badge></TableCell>
-                      <TableCell className="font-medium">{t.description}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {t.categoryAccount?.name ?? t.fromAccount?.name ?? '—'}
-                        {t.toAccount && <span className="text-xs"> → {t.toAccount.name}</span>}
-                      </TableCell>
-                      <TableCell className="text-right font-bold">
-                        <span className={t.type === 'INCOME' ? 'text-green-600' : t.type === 'EXPENSE' ? 'text-red-600' : 'text-blue-600'}>
-                          {t.type === 'INCOME' ? '+' : t.type === 'EXPENSE' ? '-' : ''}{money(t.amount)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={STATUS_COLORS[t.status]}>{t.status.replace('_', ' ')}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground font-mono">{t.reference}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
+                ))
+              )}
+            </TableBody>
+          </Table>
           <p className="text-xs text-muted-foreground">Showing {filtered.length} of {transactions.length} transactions</p>
         </CardContent>
       </Card>

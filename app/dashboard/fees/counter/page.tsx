@@ -18,6 +18,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CheckCircle2, Search, Users, Loader2 } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/auth-context'
 import { usersService } from '@/lib/services/users'
 import type { UserDropdownItem } from '@/lib/services/users'
@@ -151,7 +153,7 @@ export default function FeeCounterPage() {
               />
             </div>
             {isLoading ? (
-              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              <div className="space-y-3">{Array.from({length:5}).map((_,i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
             ) : (
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {filteredStudents.map(s => (
@@ -191,10 +193,6 @@ export default function FeeCounterPage() {
           <CardContent>
             {!selectedStudent ? (
               <p className="text-center text-muted-foreground py-8">Select a student to view their open invoices</p>
-            ) : isInvoiceLoading ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-            ) : studentInvoices.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No open invoices for this student</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -209,7 +207,13 @@ export default function FeeCounterPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {studentInvoices.map(inv => (
+                  {isInvoiceLoading ? (
+                    <SkeletonTableRows rows={5} cols={7} />
+                  ) : studentInvoices.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No open invoices for this student</TableCell>
+                    </TableRow>
+                  ) : studentInvoices.map(inv => (
                     <TableRow key={inv.id}>
                       <TableCell className="font-mono text-sm font-semibold">{inv.invoiceNo}</TableCell>
                       <TableCell className="text-sm">{inv.dueDate}</TableCell>

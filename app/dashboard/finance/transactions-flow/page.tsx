@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
 import type { FinanceTransaction, TransactionType, GlAccount } from '@/lib/services/finance'
 import { Plus, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Loader2, RefreshCw } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -171,46 +172,48 @@ export default function TransactionFlowPage() {
           <CardDescription>View and manage all financial transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : transactions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No transactions found</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.map(t => (
-                  <TableRow key={t.id}>
-                    <TableCell className="text-sm">{t.date}</TableCell>
-                    <TableCell>
-                      <Badge className={TYPE_COLORS[t.type]}>{t.type}</Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">{t.description}</TableCell>
-                    <TableCell className="text-muted-foreground">{t.categoryAccount?.name ?? '—'}</TableCell>
-                    <TableCell className="text-right font-semibold">
-                      <span className={t.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
-                        {t.type === 'INCOME' ? '+' : '-'}{money(t.amount)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-sm">{t.reference}</TableCell>
-                    <TableCell>
-                      <Badge className={STATUS_COLORS[t.status] ?? 'bg-gray-100 text-gray-800'}>{t.status}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={5} cols={7} />
+              ) : transactions.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No transactions found</TableCell></TableRow>
+              ) : (
+                <>
+                  {transactions.map(t => (
+                    <TableRow key={t.id}>
+                      <TableCell className="text-sm">{t.date}</TableCell>
+                      <TableCell>
+                        <Badge className={TYPE_COLORS[t.type]}>{t.type}</Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{t.description}</TableCell>
+                      <TableCell className="text-muted-foreground">{t.categoryAccount?.name ?? '—'}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        <span className={t.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
+                          {t.type === 'INCOME' ? '+' : '-'}{money(t.amount)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground font-mono text-sm">{t.reference}</TableCell>
+                      <TableCell>
+                        <Badge className={STATUS_COLORS[t.status] ?? 'bg-gray-100 text-gray-800'}>{t.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

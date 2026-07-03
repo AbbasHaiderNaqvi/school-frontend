@@ -21,6 +21,7 @@ import {
 import { hrService } from '@/lib/services/hr'
 import type { Department } from '@/lib/services/hr'
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Building2 } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 const EMPTY_FORM = { name: '', code: '', description: '', headOfDepartmentId: '', sortOrder: '' }
 
@@ -155,67 +156,67 @@ export default function DepartmentsPage() {
               <AlertDescription>{loadError}</AlertDescription>
             </Alert>
           )}
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-center">Sort</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {departments.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                      <Building2 className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                      No departments found
-                    </TableCell>
-                  </TableRow>
-                )}
-                {departments.map(dept => (
-                  <TableRow key={dept.id}>
-                    <TableCell className="font-semibold">{dept.name}</TableCell>
-                    <TableCell>
-                      <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{dept.code}</span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm max-w-xs truncate">
-                      {dept.description ?? '—'}
-                    </TableCell>
-                    <TableCell className="text-center text-muted-foreground">{dept.sort_order ?? '—'}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {can('hr.department.update') && (
-                            <DropdownMenuItem onClick={() => openEdit(dept)}>
-                              <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                          )}
-                          {can('hr.department.delete') && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setDeleteConfirm(dept)} className="text-destructive">
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="text-center">Sort</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={5} />
+              ) : (
+                <>
+                  {departments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                        <Building2 className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        No departments found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {departments.map(dept => (
+                    <TableRow key={dept.id}>
+                      <TableCell className="font-semibold">{dept.name}</TableCell>
+                      <TableCell>
+                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{dept.code}</span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm max-w-xs truncate">
+                        {dept.description ?? '—'}
+                      </TableCell>
+                      <TableCell className="text-center text-muted-foreground">{dept.sort_order ?? '—'}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {can('hr.department.update') && (
+                              <DropdownMenuItem onClick={() => openEdit(dept)}>
+                                <Edit className="mr-2 h-4 w-4" /> Edit
                               </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                            )}
+                            {can('hr.department.delete') && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setDeleteConfirm(dept)} className="text-destructive">
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

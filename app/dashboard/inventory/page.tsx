@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { inventoryService } from '@/lib/services/inventory'
 import { useUser } from '@/lib/hooks/use-user'
 import { Package, TrendingDown, AlertCircle, DollarSign, Archive, Activity } from 'lucide-react'
+import { TablePageSkeleton } from '@/components/ui/page-skeleton'
 
 export default function InventoryOverviewPage() {
   const { user } = useUser()
@@ -61,14 +62,7 @@ export default function InventoryOverviewPage() {
   }
 
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Inventory Overview</h1>
-          <p className="text-muted-foreground">Loading inventory statistics...</p>
-        </div>
-      </div>
-    )
+    return <TablePageSkeleton />
   }
 
   return (

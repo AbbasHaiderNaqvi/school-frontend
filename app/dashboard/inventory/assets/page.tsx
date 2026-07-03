@@ -14,6 +14,7 @@ import { inventoryService } from '@/lib/services/inventory'
 import { useUser } from '@/lib/hooks/use-user'
 import { Plus, Search, Package, Calendar } from 'lucide-react'
 import type { Asset } from '@/lib/types'
+import { TablePageSkeleton } from '@/components/ui/page-skeleton'
 
 export default function AssetsPage() {
   const { user } = useUser()
@@ -136,7 +137,7 @@ export default function AssetsPage() {
   }
 
   if (loading) {
-    return <div className="p-8">Loading assets...</div>
+    return <TablePageSkeleton />
   }
 
   return (

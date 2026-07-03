@@ -23,6 +23,7 @@ import { AccessDenied } from '@/components/ui/access-denied'
 import { feeService } from '@/lib/services/fee'
 import type { FeeInvoice, InvoiceStatus, PaymentMethod } from '@/lib/services/fee'
 import { Search, CreditCard, Loader2 } from 'lucide-react'
+import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -115,12 +116,7 @@ export default function InvoicesPage() {
   if (!can('fees.invoice.read')) return <AccessDenied />
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Fee Invoices" description="Manage student fee invoices" />
-        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-      </div>
-    )
+    return <OverviewPageSkeleton />
   }
 
   return (

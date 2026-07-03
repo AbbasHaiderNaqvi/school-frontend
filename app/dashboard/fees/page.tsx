@@ -12,10 +12,11 @@ import { feeService } from '@/lib/services/fee'
 import type { FeeDashboardSummary, FeeInvoice, FeeStructure, InvoiceStatus } from '@/lib/services/fee'
 import {
   DollarSign, Receipt, AlertTriangle, CheckCircle,
-  ArrowRight, FileText, CreditCard, Users, Loader2,
+  ArrowRight, FileText, CreditCard, Users,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -60,12 +61,7 @@ export default function FeeOverviewPage() {
   }, [user?.tenantId])
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Fee Management" description="Manage student fees and payments" />
-        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-      </div>
-    )
+    return <OverviewPageSkeleton />
   }
 
   const totalOverdue = parseFloat(summary?.totalOverdue ?? '0')

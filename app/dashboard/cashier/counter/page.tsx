@@ -19,6 +19,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { CheckCircle2, Users, DollarSign, Clock, Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/auth-context'
 import { usersService } from '@/lib/services/users'
 import type { UserDropdownItem } from '@/lib/services/users'
@@ -200,7 +201,7 @@ export default function CashierCounterPage() {
 
             <TabsContent value="fees" className="space-y-4 pt-4">
               {isLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                <div className="space-y-3">{Array.from({length:5}).map((_,i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
               ) : selectedStudent ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg">
@@ -215,7 +216,7 @@ export default function CashierCounterPage() {
                   </div>
 
                   {isInvoiceLoading ? (
-                    <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                    <div className="space-y-3">{Array.from({length:5}).map((_,i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
                   ) : studentInvoices.length === 0 ? (
                     <p className="text-center py-8 text-muted-foreground">No open invoices for this student</p>
                   ) : (

@@ -14,6 +14,7 @@ import { employeeService } from '@/lib/services/hr'
 import { useUser } from '@/lib/hooks/use-user'
 import { Plus, Search, Briefcase } from 'lucide-react'
 import type { JobOpening } from '@/lib/types'
+import { TablePageSkeleton } from '@/components/ui/page-skeleton'
 
 export default function JobOpeningsPage() {
   const { user } = useUser()
@@ -140,7 +141,7 @@ export default function JobOpeningsPage() {
   }
 
   if (loading) {
-    return <div className="p-8">Loading job openings...</div>
+    return <TablePageSkeleton />
   }
 
   return (

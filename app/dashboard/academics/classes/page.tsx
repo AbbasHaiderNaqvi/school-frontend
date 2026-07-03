@@ -25,6 +25,7 @@ import {
 import { academicsService } from '@/lib/services/academics'
 import type { AcademicClass } from '@/lib/services/academics'
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, GraduationCap } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 export default function ClassesPage() {
   const { can } = useAuth()
@@ -171,9 +172,20 @@ export default function ClassesPage() {
             </Alert>
           )}
           {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-center">Sort Order</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <SkeletonTableRows rows={5} cols={5} />
+              </TableBody>
+            </Table>
           ) : (
             <Table>
               <TableHeader>

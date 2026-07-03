@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Search, Receipt, Loader2, CheckCircle2, Download } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
@@ -184,7 +185,7 @@ export default function FeeCollectionPage() {
               />
             </div>
             {loading ? (
-              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              <div className="space-y-3">{Array.from({length:5}).map((_,i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
             ) : (
               <div className="space-y-1 max-h-80 overflow-y-auto">
                 {searchQuery && filteredStudents.length === 0 && (
@@ -218,7 +219,7 @@ export default function FeeCollectionPage() {
             {!selectedStudent ? (
               <p className="text-center text-muted-foreground py-8">Search and select a student</p>
             ) : invoiceLoading ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              <div className="space-y-3">{Array.from({length:5}).map((_,i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
             ) : studentInvoices.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">No open invoices</p>
             ) : (

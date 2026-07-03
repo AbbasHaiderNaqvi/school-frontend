@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Loader2 } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
 import type { FinanceTransaction, TransactionType, GlAccount } from '@/lib/services/finance'
@@ -106,7 +107,22 @@ export default function CashierPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <SkeletonTableRows rows={5} cols={7} />
+              </TableBody>
+            </Table>
           ) : transactions.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">No transactions recorded yet</div>
           ) : (

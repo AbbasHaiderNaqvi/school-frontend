@@ -22,6 +22,8 @@ import type { StudentFeeAssignment, StudentFeeDetail, FeeInvoice } from '@/lib/s
 import { academicsService } from '@/lib/services/academics'
 import type { AcademicClass } from '@/lib/services/academics'
 import { Search, Filter, Eye, Loader2 } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -137,10 +139,7 @@ export default function StudentFeesPage() {
               <AlertDescription>{loadError}</AlertDescription>
             </Alert>
           )}
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <Table>
+          <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
@@ -155,7 +154,9 @@ export default function StudentFeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.length === 0 ? (
+                {isLoading ? (
+                  <SkeletonTableRows rows={5} cols={9} />
+                ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                       No students found
@@ -188,8 +189,7 @@ export default function StudentFeesPage() {
                 )}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
+          </CardContent>
       </Card>
 
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
@@ -204,7 +204,7 @@ export default function StudentFeesPage() {
           </DialogHeader>
 
           {isDetailLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            <div className="space-y-3">{Array.from({length:5}).map((_,i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
           ) : detailStudent ? (
             <div className="space-y-6">
               <div className="grid grid-cols-4 gap-3">

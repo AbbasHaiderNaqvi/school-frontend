@@ -59,6 +59,7 @@ import {
   AlignLeft,
 } from 'lucide-react'
 import { formatDate, formatDateTime, getInitials } from '@/lib/utils'
+import { TablePageSkeleton } from '@/components/ui/page-skeleton'
 
 export default function TasksPage() {
   const { user } = useAuth()
@@ -331,11 +332,7 @@ export default function TasksPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    )
+    return <TablePageSkeleton />
   }
 
   return (

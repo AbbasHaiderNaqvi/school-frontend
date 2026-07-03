@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Attendance, AttendanceSummary, Employee } from '@/lib/types'
 import { Calendar, UserCheck, UserX, Clock } from 'lucide-react'
+import { TablePageSkeleton } from '@/components/ui/page-skeleton'
 
 export default function AttendancePage() {
   const { user, tenant } = useAuth()
@@ -85,11 +86,7 @@ export default function AttendancePage() {
   const lateCount = todayAttendance.filter(a => a.status === 'late').length
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    )
+    return <TablePageSkeleton />
   }
 
   return (

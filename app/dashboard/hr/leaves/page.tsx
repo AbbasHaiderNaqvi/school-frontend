@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Calendar, Plus, CheckCircle, XCircle, Clock, User } from 'lucide-react'
 import { hrService } from '@/lib/services/hr'
+import { TablePageSkeleton } from '@/components/ui/page-skeleton'
 import { useUser } from '@/lib/hooks/use-user'
 import type { LeaveRequest } from '@/lib/types'
 
@@ -124,7 +125,7 @@ export default function LeaveRequestsPage() {
   }
 
   if (loading) {
-    return <div className="flex justify-center items-center h-96">Loading...</div>
+    return <TablePageSkeleton />
   }
 
   return (

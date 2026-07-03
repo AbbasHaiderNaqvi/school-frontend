@@ -23,6 +23,8 @@ import { hrService } from '@/lib/services/hr'
 import type { PayrollRecord, PayrollSummary, Employee } from '@/lib/services/hr'
 import { DEFAULT_CURRENCY, money, fmt } from '@/lib/currency'
 import { Plus, Trash2, Loader2, RefreshCw, DollarSign, Users, CheckCircle, BookCheck } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 
 function recordStatus(r: PayrollRecord): { label: string; cls: string } {
   if (r.isActive) return { label: 'Active', cls: 'bg-green-100 text-green-800' }
@@ -238,32 +240,29 @@ export default function PayrollPage() {
               <AlertDescription>{loadError}</AlertDescription>
             </Alert>
           )}
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Effective Date</TableHead>
+                <TableHead className="text-right">Basic</TableHead>
+                <TableHead className="text-right">Gross</TableHead>
+                <TableHead className="text-right">Net Salary</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={5} cols={7} />
+              ) : records.length === 0 ? (
                 <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Effective Date</TableHead>
-                  <TableHead className="text-right">Basic</TableHead>
-                  <TableHead className="text-right">Gross</TableHead>
-                  <TableHead className="text-right">Net Salary</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead></TableHead>
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    No payroll records found.
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {records.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                      No payroll records found.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {records.map(r => {
+              ) : (
+                records.map(r => {
                   const st = recordStatus(r)
                   return (
                     <TableRow key={r.id} className={r.isActive ? '' : 'opacity-60'}>
@@ -287,10 +286,10 @@ export default function PayrollPage() {
                       </TableCell>
                     </TableRow>
                   )
-                })}
-              </TableBody>
-            </Table>
-          )}
+                })
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -432,8 +431,8 @@ export default function PayrollPage() {
             </DialogDescription>
           </DialogHeader>
           {isLoadingDetail ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : detailRecord && (
             <div className="space-y-3 text-sm">

@@ -29,6 +29,7 @@ import {
   Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Users,
   Link2, ImageIcon, UserCheck, ChevronDown,
 } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 const EMPLOYMENT_TYPES: EmploymentType[] = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'TEMPORARY']
 const EMPLOYEE_STATUSES: EmployeeStatus[] = ['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'TERMINATED', 'RESIGNED']
@@ -316,12 +317,7 @@ export default function EmployeesPage() {
               <AlertDescription>{loadError}</AlertDescription>
             </Alert>
           )}
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Table>
+          <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
@@ -333,6 +329,10 @@ export default function EmployeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {isLoading ? (
+                  <SkeletonTableRows rows={5} cols={6} />
+                ) : (
+                  <>
                 {employees.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
@@ -418,9 +418,10 @@ export default function EmployeesPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+                  </>
+                )}
               </TableBody>
             </Table>
-          )}
         </CardContent>
       </Card>
 

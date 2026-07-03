@@ -16,7 +16,9 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { feeService } from '@/lib/services/fee'
 import type { FeeReceipt, ReceiptPrintData } from '@/lib/services/fee'
-import { Download, Eye, Search, Loader2, FileText } from 'lucide-react'
+import { Download, Eye, Search, FileText } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -158,10 +160,7 @@ export default function ReceiptsPage() {
             />
           </div>
 
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <Table>
+          <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Receipt #</TableHead>
@@ -173,7 +172,9 @@ export default function ReceiptsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.length === 0 ? (
+                {isLoading ? (
+                  <SkeletonTableRows rows={6} cols={6} />
+                ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No receipts found
@@ -206,7 +207,6 @@ export default function ReceiptsPage() {
                 )}
               </TableBody>
             </Table>
-          )}
         </CardContent>
       </Card>
 
@@ -218,7 +218,9 @@ export default function ReceiptsPage() {
           </DialogHeader>
 
           {isPrintLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
           ) : printData ? (
             <div className="space-y-4">
               <div className="p-6 rounded-lg border space-y-4">

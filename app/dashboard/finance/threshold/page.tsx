@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertTriangle, Loader2, Save } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -95,7 +96,9 @@ export default function ThresholdManagementPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
           ) : settings ? (
             <div className="flex items-center justify-between">
               <div className="space-y-2">

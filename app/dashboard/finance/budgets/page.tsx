@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
 import type { Budget, GlAccount } from '@/lib/services/finance'
 import { Plus, Search, Loader2, Wallet } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -150,21 +151,25 @@ export default function BudgetsPage() {
               <AlertDescription>{loadError}</AlertDescription>
             </Alert>
           )}
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <Table>
-              <TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>GL Account</TableHead>
+                <TableHead className="text-right">Allocated Amount</TableHead>
+                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={5} cols={5} />
+              ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>GL Account</TableHead>
-                  <TableHead className="text-right">Allocated Amount</TableHead>
-                  <TableHead>Start Date</TableHead>
-                  <TableHead>End Date</TableHead>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No budgets found</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map(b => (
+              ) : (
+                filtered.map(b => (
                   <TableRow key={b.id}>
                     <TableCell className="font-medium">{b.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">
@@ -174,15 +179,10 @@ export default function BudgetsPage() {
                     <TableCell>{b.startDate}</TableCell>
                     <TableCell>{b.endDate}</TableCell>
                   </TableRow>
-                ))}
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No budgets found</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          )}
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

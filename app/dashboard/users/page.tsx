@@ -46,6 +46,7 @@ import {
   UserPlus, Edit, Trash2, Search, MoreHorizontal,
   Lock, CheckCircle, XCircle, Loader2, Copy, RefreshCw,
 } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 const ROLE_OPTIONS: Array<{ value: ApiUserRole; label: string }> = [
   { value: 'tenant_owner', label: 'Tenant Owner' },
@@ -237,10 +238,7 @@ export default function UserManagementPage() {
         </CardHeader>
         <CardContent>
           {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
-          {isLoading ? (
-            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <Table>
+          <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Code</TableHead>
@@ -252,66 +250,68 @@ export default function UserManagementPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.length === 0 && (
+                {isLoading ? (
+                  <SkeletonTableRows rows={5} cols={6} />
+                ) : users.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No users found</TableCell></TableRow>
+                ) : (
+                  users.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{u.userCode}</TableCell>
+                      <TableCell className="font-medium">{u.fullName}</TableCell>
+                      <TableCell>{u.email}</TableCell>
+                      <TableCell>
+                        <Badge className={ROLE_COLORS[u.role] || 'bg-gray-100 text-gray-800'}>
+                          {u.role.replace(/_/g, ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={u.isActive ? 'default' : 'secondary'}>
+                          {u.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {can('users.user.update') && (
+                              <DropdownMenuItem onClick={() => openEdit(u)}>
+                                <Edit className="mr-2 h-4 w-4" /> Edit
+                              </DropdownMenuItem>
+                            )}
+                            {can('users.user.reset_password') && (
+                              <DropdownMenuItem onClick={() => handleResetPassword(u)}>
+                                <Lock className="mr-2 h-4 w-4" /> Reset Password
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            {u.isActive
+                              ? can('users.user.deactivate') && (
+                                  <DropdownMenuItem onClick={() => handleDeactivate(u)} className="text-orange-600">
+                                    <XCircle className="mr-2 h-4 w-4" /> Deactivate
+                                  </DropdownMenuItem>
+                                )
+                              : can('users.user.reactivate') && (
+                                  <DropdownMenuItem onClick={() => handleReactivate(u)} className="text-green-600">
+                                    <CheckCircle className="mr-2 h-4 w-4" /> Reactivate
+                                  </DropdownMenuItem>
+                                )
+                            }
+                            {can('users.user.delete') && (
+                              <DropdownMenuItem onClick={() => handleDelete(u)} className="text-destructive">
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
-                {users.map((u) => (
-                  <TableRow key={u.id}>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{u.userCode}</TableCell>
-                    <TableCell className="font-medium">{u.fullName}</TableCell>
-                    <TableCell>{u.email}</TableCell>
-                    <TableCell>
-                      <Badge className={ROLE_COLORS[u.role] || 'bg-gray-100 text-gray-800'}>
-                        {u.role.replace(/_/g, ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={u.isActive ? 'default' : 'secondary'}>
-                        {u.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {can('users.user.update') && (
-                            <DropdownMenuItem onClick={() => openEdit(u)}>
-                              <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                          )}
-                          {can('users.user.reset_password') && (
-                            <DropdownMenuItem onClick={() => handleResetPassword(u)}>
-                              <Lock className="mr-2 h-4 w-4" /> Reset Password
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          {u.isActive
-                            ? can('users.user.deactivate') && (
-                                <DropdownMenuItem onClick={() => handleDeactivate(u)} className="text-orange-600">
-                                  <XCircle className="mr-2 h-4 w-4" /> Deactivate
-                                </DropdownMenuItem>
-                              )
-                            : can('users.user.reactivate') && (
-                                <DropdownMenuItem onClick={() => handleReactivate(u)} className="text-green-600">
-                                  <CheckCircle className="mr-2 h-4 w-4" /> Reactivate
-                                </DropdownMenuItem>
-                              )
-                          }
-                          {can('users.user.delete') && (
-                            <DropdownMenuItem onClick={() => handleDelete(u)} className="text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
               </TableBody>
             </Table>
-          )}
           {/* Pagination */}
           {total > 20 && (
             <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground">

@@ -16,19 +16,21 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
   console.log('[v0] Proxy forwarding:', request.method, targetUrl)
 
   // Forward headers (auth token, content-type, etc.) — strip host/origin
+  const originalContentType = request.headers.get('content-type')
   const forwardHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
+    // Forward original content-type verbatim (preserves multipart boundary)
+    'Content-Type': originalContentType || 'application/json',
   }
   const authorization = request.headers.get('authorization')
   if (authorization) {
     forwardHeaders['Authorization'] = authorization
   }
 
-  let body: string | undefined
+  let body: ArrayBuffer | string | undefined
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    body = await request.text()
-    console.log('[v0] Proxy body:', body)
+    // Use arrayBuffer to safely proxy binary payloads (e.g. multipart file uploads)
+    body = await request.arrayBuffer()
   }
 
   try {
@@ -40,13 +42,22 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
       ...(process.env.NODE_ENV !== 'production' ? {} : {}),
     })
 
-    const responseText = await upstream.text()
-    console.log('[v0] Proxy response status:', upstream.status, 'body:', responseText.slice(0, 200))
+    const upstreamContentType = upstream.headers.get('Content-Type') || ''
+    const isBinary = upstreamContentType.startsWith('image/') ||
+      upstreamContentType === 'application/octet-stream'
 
-    return new NextResponse(responseText, {
+    let responseBody: string | ArrayBuffer
+    if (isBinary) {
+      responseBody = await upstream.arrayBuffer()
+    } else {
+      responseBody = await upstream.text()
+      console.log('[v0] Proxy response status:', upstream.status, 'body:', (responseBody as string).slice(0, 200))
+    }
+
+    return new NextResponse(responseBody, {
       status: upstream.status,
       headers: {
-        'Content-Type': upstream.headers.get('Content-Type') || 'application/json',
+        'Content-Type': upstreamContentType || 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
     })

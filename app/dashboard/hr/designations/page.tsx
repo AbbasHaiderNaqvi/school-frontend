@@ -22,6 +22,7 @@ import {
 import { hrService } from '@/lib/services/hr'
 import type { Designation } from '@/lib/services/hr'
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Award } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 const EMPTY_FORM = { name: '', code: '', description: '', level: '' }
 
@@ -156,12 +157,7 @@ export default function DesignationsPage() {
               <AlertDescription>{loadError}</AlertDescription>
             </Alert>
           )}
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <Table>
+          <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
@@ -171,54 +167,56 @@ export default function DesignationsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {designations.length === 0 && (
+                {isLoading ? (
+                  <SkeletonTableRows rows={5} cols={4} />
+                ) : designations.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
                       <Award className="h-10 w-10 mx-auto mb-2 opacity-30" />
                       No designations found
                     </TableCell>
                   </TableRow>
-                )}
-                {designations.map(desig => (
-                  <TableRow key={desig.id}>
-                    <TableCell className="font-semibold">{desig.name}</TableCell>
-                    <TableCell>
-                      <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{desig.code}</span>
-                    </TableCell>
-                    <TableCell>
-                      {desig.level
-                        ? <Badge variant="secondary">{desig.level}</Badge>
-                        : <span className="text-muted-foreground">—</span>
-                      }
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {can('hr.designation.update') && (
-                            <DropdownMenuItem onClick={() => openEdit(desig)}>
-                              <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                          )}
-                          {can('hr.designation.delete') && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setDeleteConfirm(desig)} className="text-destructive">
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                ) : (
+                  designations.map(desig => (
+                    <TableRow key={desig.id}>
+                      <TableCell className="font-semibold">{desig.name}</TableCell>
+                      <TableCell>
+                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{desig.code}</span>
+                      </TableCell>
+                      <TableCell>
+                        {desig.level
+                          ? <Badge variant="secondary">{desig.level}</Badge>
+                          : <span className="text-muted-foreground">—</span>
+                        }
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {can('hr.designation.update') && (
+                              <DropdownMenuItem onClick={() => openEdit(desig)}>
+                                <Edit className="mr-2 h-4 w-4" /> Edit
                               </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                            )}
+                            {can('hr.designation.delete') && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setDeleteConfirm(desig)} className="text-destructive">
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
+          </CardContent>
       </Card>
 
       {/* Create / Edit Dialog */}

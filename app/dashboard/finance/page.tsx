@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { financeService } from '@/lib/services/finance'
 import type { GlAccount, FinanceOverview } from '@/lib/services/finance'
-import { DollarSign, TrendingUp, TrendingDown, Wallet, ArrowRight, PieChart, Loader2 } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, Wallet, ArrowRight, PieChart } from 'lucide-react'
+import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 import Link from 'next/link'
 
 function fmt(val: string | number | undefined): string {
@@ -45,12 +46,7 @@ export default function FinanceOverviewPage() {
   }, [user?.tenantId])
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Finance Overview" description="Financial summary and reports" />
-        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-      </div>
-    )
+    return <OverviewPageSkeleton />
   }
 
   const totalIncome = parseFloat(overview?.totalIncome ?? '0')

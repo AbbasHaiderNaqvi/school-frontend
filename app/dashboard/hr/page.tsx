@@ -10,9 +10,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { money } from '@/lib/currency'
 import {
-  Loader2, RefreshCw, Users, UserCheck, Clock, Briefcase,
+  RefreshCw, Users, UserCheck, Clock, Briefcase,
   TrendingUp, AlertCircle, Building2, CalendarCheck, DollarSign,
 } from 'lucide-react'
+import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 import { hrService } from '@/lib/services/hr'
 import type { HrDashboardSummary, DepartmentStat, AttendanceTrendPoint, LeaveBalanceSummary } from '@/lib/services/hr'
 import Link from 'next/link'
@@ -51,6 +52,7 @@ export default function HROverviewPage() {
   useEffect(() => { loadData() }, [loadData])
 
   if (!can('hr.dashboard.read')) return <AccessDenied />
+  if (isLoading) return <OverviewPageSkeleton />
 
   const emp = summary?.employees
   const today = summary?.todayAttendance
@@ -76,13 +78,7 @@ export default function HROverviewPage() {
         </Alert>
       )}
 
-      {isLoading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <>
-          {/* ── Top Stats ──────────────────────────────────────────────── */}
+      {/* ── Top Stats ──────────────────────────────────────────────── */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -362,8 +358,6 @@ export default function HROverviewPage() {
               </div>
             </CardContent>
           </Card>
-        </>
-      )}
     </div>
   )
 }

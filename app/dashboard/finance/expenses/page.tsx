@@ -26,6 +26,7 @@ import type { FinanceTransaction, TransactionStatus, GlAccount } from '@/lib/ser
 import {
   Plus, Search, CheckCircle, Clock, XCircle, Loader2, DollarSign, RefreshCw,
 } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -216,10 +217,7 @@ export default function ExpensesPage() {
               <AlertDescription>{loadError}</AlertDescription>
             </Alert>
           )}
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <Table>
+          <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Reference</TableHead>
@@ -232,6 +230,10 @@ export default function ExpensesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {isLoading ? (
+                  <SkeletonTableRows rows={5} cols={7} />
+                ) : (
+                  <>
                 {filtered.map(exp => (
                   <TableRow key={exp.id}>
                     <TableCell className="font-mono text-sm">{exp.reference}</TableCell>
@@ -259,9 +261,10 @@ export default function ExpensesPage() {
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No expenses found</TableCell>
                   </TableRow>
                 )}
+                  </>
+                )}
               </TableBody>
             </Table>
-          )}
         </CardContent>
       </Card>
 
