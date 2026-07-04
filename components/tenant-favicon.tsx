@@ -13,7 +13,7 @@ export function TenantFavicon() {
     brandingService.getPublicBranding(slug).then(data => {
       if (!data?.faviconUrl) return
 
-      const href = brandingService.faviconUrl(slug)
+      const href = brandingService.faviconUrl(slug, data.brandingUpdatedAt)
       document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]').forEach(link => link.remove())
 
       const link = document.createElement('link')

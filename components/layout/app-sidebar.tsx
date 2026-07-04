@@ -149,12 +149,12 @@ const navItems: NavItem[] = [
       { title: 'Sections', href: '/dashboard/academics/sections', icon: LayoutList },
     ],
   },
-  {
-    title: 'Task Board',
-    href: '/dashboard/tasks',
-    icon: ListTodo,
-    featureFlag: 'task_module',
-  },
+  // {
+  //   title: 'Task Board',
+  //   href: '/dashboard/tasks',
+  //   icon: ListTodo,
+  //   featureFlag: 'task_module',
+  // },
   {
     title: 'Settings',
     icon: Settings,

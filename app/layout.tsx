@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Mudirr - School Management System',
-  description: 'Comprehensive multi-tenant school management system',
+  description: 'Comprehensive school management system',
   generator: 'v0.app',
   icons: {
     icon: [

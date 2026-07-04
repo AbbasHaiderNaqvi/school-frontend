@@ -8,11 +8,19 @@ export interface TenantBranding {
   description?: string | null
   logoUrl?: string | null
   faviconUrl?: string | null
+  brandingUpdatedAt?: string | null
 }
 
 function authHeader(): Record<string, string> {
   const token = tokenStore.getAccessToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+// Appends a cache-busting query param so browsers re-fetch the image after a re-upload
+// instead of serving a stale cached response for the same static URL.
+function withCacheBust(url: string, version?: string | null): string {
+  if (!version) return url
+  return `${url}?v=${encodeURIComponent(version)}`
 }
 
 export const brandingService = {
@@ -23,8 +31,8 @@ export const brandingService = {
       })
       if (!res.ok) return null
       const data: TenantBranding = await res.json()
-      if (data.logoUrl) data.logoUrl = `${PROXY}${data.logoUrl}`
-      if (data.faviconUrl) data.faviconUrl = `${PROXY}${data.faviconUrl}`
+      if (data.logoUrl) data.logoUrl = withCacheBust(`${PROXY}${data.logoUrl}`, data.brandingUpdatedAt)
+      if (data.faviconUrl) data.faviconUrl = withCacheBust(`${PROXY}${data.faviconUrl}`, data.brandingUpdatedAt)
       return data
     } catch {
       return null
@@ -60,8 +68,8 @@ export const brandingService = {
         return { success: false, error: err.message || 'Failed to update branding' }
       }
       const updated: TenantBranding = await res.json().catch(() => ({}))
-      if (updated.logoUrl) updated.logoUrl = `${PROXY}${updated.logoUrl}`
-      if (updated.faviconUrl) updated.faviconUrl = `${PROXY}${updated.faviconUrl}`
+      if (updated.logoUrl) updated.logoUrl = withCacheBust(`${PROXY}${updated.logoUrl}`, updated.brandingUpdatedAt)
+      if (updated.faviconUrl) updated.faviconUrl = withCacheBust(`${PROXY}${updated.faviconUrl}`, updated.brandingUpdatedAt)
       return { success: true, data: updated }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Network error' }
@@ -91,8 +99,8 @@ export const brandingService = {
       })
       if (!res.ok) return null
       const data: TenantBranding = await res.json()
-      if (data.logoUrl) data.logoUrl = `${PROXY}${data.logoUrl}`
-      if (data.faviconUrl) data.faviconUrl = `${PROXY}${data.faviconUrl}`
+      if (data.logoUrl) data.logoUrl = withCacheBust(`${PROXY}${data.logoUrl}`, data.brandingUpdatedAt)
+      if (data.faviconUrl) data.faviconUrl = withCacheBust(`${PROXY}${data.faviconUrl}`, data.brandingUpdatedAt)
       return data
     } catch {
       return null
@@ -100,11 +108,11 @@ export const brandingService = {
   },
 
   // Direct URL to the logo image for a given slug (unauthenticated CDN endpoint)
-  logoUrl(slug: string): string {
-    return `${PROXY}/public/tenants/${slug}/logo`
+  logoUrl(slug: string, version?: string | null): string {
+    return withCacheBust(`${PROXY}/public/tenants/${slug}/logo`, version)
   },
 
-  faviconUrl(slug: string): string {
-    return `${PROXY}/public/tenants/${slug}/favicon`
+  faviconUrl(slug: string, version?: string | null): string {
+    return withCacheBust(`${PROXY}/public/tenants/${slug}/favicon`, version)
   },
 }
