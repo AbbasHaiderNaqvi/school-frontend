@@ -174,7 +174,7 @@ export default function Home() {
         <div className="cs-title">MUDDIR</div>
         <div className="cs-sub">Coming soon</div>
         <div className="cs-credit">
-          Powered by <a href="https://www.techneedllc.com/" target="_blank" rel="noopener noreferrer">Technseed</a>
+          Powered by <a href="https://www.techneedllc.com/" target="_blank" rel="noopener noreferrer">Techneed</a>
         </div>
       </div>
     </>
