@@ -42,9 +42,10 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/layout/page-header'
 import { AccessDenied } from '@/components/ui/access-denied'
+import { ManageUserGroupsDialog } from '@/components/users/manage-user-groups-dialog'
 import {
   UserPlus, Edit, Trash2, Search, MoreHorizontal,
-  Lock, CheckCircle, XCircle, Loader2, Copy, RefreshCw,
+  Lock, CheckCircle, XCircle, Loader2, Copy, RefreshCw, ShieldCheck,
 } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
@@ -90,6 +91,7 @@ export default function UserManagementPage() {
   const [submitError, setSubmitError] = useState('')
   const [setupUrl, setSetupUrl] = useState('')
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
+  const [manageGroupsUser, setManageGroupsUser] = useState<UserListItem | null>(null)
 
   const [addForm, setAddForm] = useState({
     fullName: '', email: '', role: 'teacher' as ApiUserRole, phone: '',
@@ -286,6 +288,11 @@ export default function UserManagementPage() {
                                 <Lock className="mr-2 h-4 w-4" /> Reset Password
                               </DropdownMenuItem>
                             )}
+                            {can('permissions.assign') && (
+                              <DropdownMenuItem onClick={() => setManageGroupsUser(u)}>
+                                <ShieldCheck className="mr-2 h-4 w-4" /> Manage Roles
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             {u.isActive
                               ? can('users.user.deactivate') && (
@@ -429,6 +436,12 @@ export default function UserManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ManageUserGroupsDialog
+        user={manageGroupsUser}
+        open={!!manageGroupsUser}
+        onOpenChange={(o) => !o && setManageGroupsUser(null)}
+      />
     </div>
   )
 }

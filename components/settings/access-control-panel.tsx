@@ -132,10 +132,10 @@ export function AccessControlPanel() {
     const { group, error } = await accessControlService.createGroup({ name: createName.trim(), description: createDesc.trim() || undefined })
     setSaving(false)
     if (error || !group) {
-      toast({ title: 'Error', description: error || 'Failed to create group', variant: 'destructive' })
+      toast({ title: 'Error', description: error || 'Failed to create role', variant: 'destructive' })
       return
     }
-    toast({ title: 'Group created', description: `"${group.name}" is ready.` })
+    toast({ title: 'Role created', description: `"${group.name}" is ready.` })
     setCreateOpen(false)
     setCreateName('')
     setCreateDesc('')
@@ -155,10 +155,10 @@ export function AccessControlPanel() {
     const { group, error } = await accessControlService.updateGroup(selectedId, { name: editName.trim(), description: editDesc.trim() })
     setSaving(false)
     if (error || !group) {
-      toast({ title: 'Error', description: error || 'Failed to update group', variant: 'destructive' })
+      toast({ title: 'Error', description: error || 'Failed to update role', variant: 'destructive' })
       return
     }
-    toast({ title: 'Group updated' })
+    toast({ title: 'Role updated' })
     setEditOpen(false)
     await Promise.all([loadGroups(), refreshDetail()])
   }
@@ -175,10 +175,10 @@ export function AccessControlPanel() {
     const { group, error } = await accessControlService.cloneGroup(cloneTarget.id, cloneName.trim())
     setSaving(false)
     if (error || !group) {
-      toast({ title: 'Error', description: error || 'Failed to clone group', variant: 'destructive' })
+      toast({ title: 'Error', description: error || 'Failed to clone role', variant: 'destructive' })
       return
     }
-    toast({ title: 'Group cloned', description: `Created "${group.name}".` })
+    toast({ title: 'Role cloned', description: `Created "${group.name}".` })
     setCloneOpen(false)
     setCloneTarget(null)
     await loadGroups()
@@ -191,10 +191,10 @@ export function AccessControlPanel() {
     const { success, error } = await accessControlService.deleteGroup(deleteTarget.id)
     setSaving(false)
     if (!success) {
-      toast({ title: 'Error', description: error || 'Failed to delete group', variant: 'destructive' })
+      toast({ title: 'Error', description: error || 'Failed to delete role', variant: 'destructive' })
       return
     }
-    toast({ title: 'Group deleted' })
+    toast({ title: 'Role deleted' })
     if (selectedId === deleteTarget.id) setSelectedId(null)
     setDeleteTarget(null)
     await loadGroups()
@@ -246,16 +246,16 @@ export function AccessControlPanel() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Create reusable permission groups, then assign them to users to control what they can see and do.
+        Create reusable roles, then assign them to users to control what they can see and do.
       </p>
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
-        {/* Groups list */}
+        {/* Roles list */}
         <Card className="h-fit">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CardTitle className="text-base">Groups</CardTitle>
+                <CardTitle className="text-base">Roles</CardTitle>
                 {!loadingGroups && <Badge variant="secondary">{groups.length}</Badge>}
               </div>
               <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -266,7 +266,7 @@ export function AccessControlPanel() {
             <div className="relative pt-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search groups..."
+                placeholder="Search roles..."
                 value={groupSearch}
                 onChange={e => setGroupSearch(e.target.value)}
                 className="h-8 pl-8 text-sm"
@@ -287,7 +287,7 @@ export function AccessControlPanel() {
                 ))}
               </div>
             ) : filteredGroups.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No groups found.</p>
+              <p className="text-sm text-muted-foreground text-center py-8">No roles found.</p>
             ) : (
               <div className="max-h-[560px] overflow-y-auto overflow-x-hidden pr-1">
                 <div className="space-y-0.5">
@@ -358,7 +358,7 @@ export function AccessControlPanel() {
           </CardContent>
         </Card>
 
-        {/* Group detail */}
+        {/* Role detail */}
         <Card>
           {!selectedId ? (
             <CardContent className="py-6">
@@ -367,8 +367,8 @@ export function AccessControlPanel() {
                   <EmptyMedia variant="icon">
                     <ShieldCheck />
                   </EmptyMedia>
-                  <EmptyTitle>No group selected</EmptyTitle>
-                  <EmptyDescription>Pick a group on the left to view and manage its permissions.</EmptyDescription>
+                  <EmptyTitle>No role selected</EmptyTitle>
+                  <EmptyDescription>Pick a role on the left to view and manage its permissions.</EmptyDescription>
                 </EmptyHeader>
               </Empty>
             </CardContent>
@@ -462,7 +462,7 @@ export function AccessControlPanel() {
                         <KeyRound />
                       </EmptyMedia>
                       <EmptyTitle>No permissions yet</EmptyTitle>
-                      <EmptyDescription>Add permissions to define what this group can access.</EmptyDescription>
+                      <EmptyDescription>Add permissions to define what this role can access.</EmptyDescription>
                     </EmptyHeader>
                   </Empty>
                 ) : (
@@ -528,12 +528,12 @@ export function AccessControlPanel() {
         </Card>
       </div>
 
-      {/* Create group dialog */}
+      {/* Create role dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Permission Group</DialogTitle>
-            <DialogDescription>Create a reusable set of permissions you can assign to users.</DialogDescription>
+            <DialogTitle>New Role</DialogTitle>
+            <DialogDescription>Create a reusable role you can assign to users.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -549,17 +549,17 @@ export function AccessControlPanel() {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button onClick={handleCreate} disabled={saving || !createName.trim()}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create Group
+              Create Role
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit group dialog */}
+      {/* Edit role dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Group</DialogTitle>
+            <DialogTitle>Rename Role</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -581,15 +581,15 @@ export function AccessControlPanel() {
         </DialogContent>
       </Dialog>
 
-      {/* Clone group dialog */}
+      {/* Clone role dialog */}
       <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Clone "{cloneTarget?.name}"</DialogTitle>
-            <DialogDescription>Creates a new, editable group with the same permissions.</DialogDescription>
+            <DialogDescription>Creates a new, editable role with the same permissions.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="clone-name">New group name</Label>
+            <Label htmlFor="clone-name">New role name</Label>
             <Input id="clone-name" value={cloneName} onChange={e => setCloneName(e.target.value)} />
           </div>
           <DialogFooter>
@@ -607,7 +607,7 @@ export function AccessControlPanel() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Permission</DialogTitle>
-            <DialogDescription>Search the permission catalog and add what this group needs.</DialogDescription>
+            <DialogDescription>Search the permission catalog and add what this role needs.</DialogDescription>
           </DialogHeader>
 
           <div className="relative">
@@ -677,7 +677,7 @@ export function AccessControlPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete "{deleteTarget?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the group. Any users assigned to it will lose the permissions it grants. This cannot be undone.
+              This permanently deletes the role. Any users assigned to it will lose the permissions it grants. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

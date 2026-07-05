@@ -42,6 +42,32 @@ export interface GroupDetail extends PermissionGroup {
   permissions: GroupPermission[]
 }
 
+export interface AssignGroupToUserPayload {
+  groupId: string
+  scopeType?: string
+  scopeId?: string
+  startsAt?: string
+  expiresAt?: string
+  reason?: string
+}
+
+export interface UserGroupAssignment {
+  id: string
+  name: string
+  slug?: string
+  description?: string | null
+  isSystem?: boolean
+  isProtected?: boolean
+  isActive?: boolean
+  assignedByUserId?: string | null
+  assignedAt?: string
+  scopeType?: string | null
+  scopeId?: string | null
+  startsAt?: string | null
+  expiresAt?: string | null
+  reason?: string | null
+}
+
 // The catalog endpoint groups permissions under { modules: [{ module, permissions }], totalPermissions }.
 // Stay defensive about older/alternate shapes too: bare array, { data: [...] }, or a plain
 // { moduleName: [...] } map.
@@ -153,6 +179,26 @@ export const accessControlService = {
 
   async removePermissionFromGroup(groupId: string, permissionId: string): Promise<{ success: boolean; error?: string }> {
     const { error } = await api.delete(`/access-control/groups/${groupId}/permissions/${permissionId}`)
+    return { success: !error, error: error || undefined }
+  },
+
+  async getUserGroups(userId: string): Promise<UserGroupAssignment[]> {
+    const { data } = await api.get(`/access-control/users/${userId}/groups`)
+    if (!data) return []
+    if (Array.isArray(data)) return data as UserGroupAssignment[]
+    const obj = data as Record<string, unknown>
+    if (Array.isArray(obj.groups)) return obj.groups as UserGroupAssignment[]
+    if (Array.isArray(obj.data)) return obj.data as UserGroupAssignment[]
+    return []
+  },
+
+  async assignGroupToUser(userId: string, payload: AssignGroupToUserPayload): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.post(`/access-control/users/${userId}/groups`, payload)
+    return { success: !error, error: error || undefined }
+  },
+
+  async removeGroupFromUser(userId: string, groupId: string): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.delete(`/access-control/users/${userId}/groups/${groupId}`)
     return { success: !error, error: error || undefined }
   },
 }

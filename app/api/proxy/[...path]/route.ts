@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-
-// Ensure no trailing slash on base URL to avoid double slashes
-const BASE_URL = (process.env.API_BASE_URL || 'https://indigo-vulture-707295.hostingersite.com').replace(/\/$/, '')
+import { API_BASE_URL as BASE_URL } from '@/lib/api-base-url'
 
 async function handler(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params
