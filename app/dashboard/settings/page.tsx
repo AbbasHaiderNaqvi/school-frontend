@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { tenantService, authService } from '@/lib/services'
 import { brandingService, type TenantBranding } from '@/lib/services/branding'
+import { AccessControlPanel } from '@/components/settings/access-control-panel'
 import { currencyService, CURRENCIES } from '@/lib/utils/currency'
 import type { Tenant, TenantContactInfo } from '@/lib/types'
 import { PageHeader } from '@/components/layout/page-header'
@@ -35,6 +36,7 @@ import {
   MapPin,
   Settings as SettingsIcon,
   Shield,
+  ShieldCheck,
   Bell,
   Save,
   Loader2,
@@ -312,6 +314,12 @@ export default function SettingsPage() {
             <TabsTrigger value="settings" className="gap-2">
               <SettingsIcon className="h-4 w-4" />
               System
+            </TabsTrigger>
+          )}
+          {isOwner && (
+            <TabsTrigger value="access-control" className="gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              Access Control
             </TabsTrigger>
           )}
           <TabsTrigger value="notifications" className="gap-2">
@@ -932,6 +940,13 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+        )}
+
+        {/* Access Control Tab */}
+        {isOwner && (
+          <TabsContent value="access-control" className="space-y-6">
+            <AccessControlPanel />
           </TabsContent>
         )}
 
