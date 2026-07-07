@@ -8,6 +8,14 @@ function toArray<T>(raw: unknown): T[] {
   return []
 }
 
+// Reports may come back bare or wrapped in { data: ... } — unwrap either way.
+function unwrapReport(raw: unknown): unknown {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'data' in (raw as Record<string, unknown>)) {
+    return (raw as Record<string, unknown>).data
+  }
+  return raw
+}
+
 export type GlAccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY'
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER'
 export type TransactionStatus = 'POSTED' | 'PENDING_APPROVAL' | 'REJECTED' | 'REVERSED'
@@ -193,18 +201,46 @@ export const financeService = {
   },
 
   // Reports
-  async getTrialBalance(asOf?: string): Promise<unknown> {
-    const qs = asOf ? `?asOf=${asOf}` : ''
-    const { data } = await api.get(`/finance/reports/trial-balance${qs}`)
-    return data
+  async getTrialBalance(params: { asOf?: string } = {}): Promise<unknown> {
+    const query = new URLSearchParams()
+    if (params.asOf) query.set('asOf', params.asOf)
+    const qs = query.toString()
+    const { data } = await api.get(`/finance/reports/trial-balance${qs ? `?${qs}` : ''}`)
+    return unwrapReport(data)
   },
 
-  async getLedger(accountId: string, from?: string, to?: string): Promise<unknown> {
-    const query = new URLSearchParams({ accountId })
-    if (from) query.set('from', from)
-    if (to) query.set('to', to)
+  async getLedger(params: { glAccountId: string; from?: string; to?: string }): Promise<unknown> {
+    const query = new URLSearchParams({ glAccountId: params.glAccountId })
+    if (params.from) query.set('from', params.from)
+    if (params.to) query.set('to', params.to)
     const { data } = await api.get(`/finance/reports/ledger?${query.toString()}`)
-    return data
+    return unwrapReport(data)
+  },
+
+  async getStatement(params: { from?: string; to?: string } = {}): Promise<unknown> {
+    const query = new URLSearchParams()
+    if (params.from) query.set('from', params.from)
+    if (params.to) query.set('to', params.to)
+    const qs = query.toString()
+    const { data } = await api.get(`/finance/reports/statement${qs ? `?${qs}` : ''}`)
+    return unwrapReport(data)
+  },
+
+  async getIncomeStatement(params: { from?: string; to?: string } = {}): Promise<unknown> {
+    const query = new URLSearchParams()
+    if (params.from) query.set('from', params.from)
+    if (params.to) query.set('to', params.to)
+    const qs = query.toString()
+    const { data } = await api.get(`/finance/reports/income-statement${qs ? `?${qs}` : ''}`)
+    return unwrapReport(data)
+  },
+
+  async getBalanceSheet(params: { asOf?: string } = {}): Promise<unknown> {
+    const query = new URLSearchParams()
+    if (params.asOf) query.set('asOf', params.asOf)
+    const qs = query.toString()
+    const { data } = await api.get(`/finance/reports/balance-sheet${qs ? `?${qs}` : ''}`)
+    return unwrapReport(data)
   },
 
   // Settings

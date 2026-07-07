@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   DollarSign,
   Menu,
+  BarChart3,
 } from 'lucide-react'
 import {
   Collapsible,
@@ -82,6 +83,7 @@ const navItems: NavItem[] = [
     children: [
       { title: 'Overview', href: '/dashboard/finance', icon: LayoutDashboard },
       { title: 'GL Accounts', href: '/dashboard/finance/gl', icon: FileText, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner'] },
+      { title: 'Reports', href: '/dashboard/finance/reports', icon: BarChart3, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner', 'tenant_principal'] },
       { title: 'All Transactions', href: '/dashboard/finance/all-transactions', icon: Receipt },
       { title: 'Transaction Flow', href: '/dashboard/finance/transactions-flow', icon: Wallet, roles: ['tenant_accountant', 'tenant_admin', 'tenant_principal'] },
       { title: 'Expenses', href: '/dashboard/finance/expenses', icon: Wallet, roles: ['tenant_accountant', 'tenant_admin', 'tenant_principal'] },

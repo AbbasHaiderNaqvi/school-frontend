@@ -32,6 +32,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [tenantSlug, setTenantSlug] = useState<string | null>(null)
   const [branding, setBranding] = useState<TenantBranding | null>(null)
+  const [brandingLoading, setBrandingLoading] = useState(true)
 
   useEffect(() => {
     const slug = getTenantSlug()
@@ -41,7 +42,10 @@ export default function LoginPage() {
       return
     }
     setTenantSlug(slug)
-    brandingService.getPublicBranding(slug).then(setBranding)
+    brandingService.getPublicBranding(slug).then(data => {
+      setBranding(data)
+      setBrandingLoading(false)
+    })
   }, [router])
 
   const schoolName = branding?.name || tenantSlug?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Mudir'
@@ -65,6 +69,16 @@ export default function LoginPage() {
     }
 
     setIsLoading(false)
+  }
+
+  if (brandingLoading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'oklch(0.17 0.02 250)' }}>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: 'oklch(0.55 0.18 250)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite' }}>
+          <GraduationCap style={{ width: 28, height: 28, color: '#fff' }} />
+        </div>
+      </div>
+    )
   }
 
   return (

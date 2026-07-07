@@ -1,301 +1,274 @@
 'use client'
 
-import { money } from '@/lib/currency'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
-import { useEffect, useState, useCallback } from 'react'
-import { financeService } from '@/lib/services/finance'
-import type { FinanceTransaction, GlAccount, Budget } from '@/lib/services/finance'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import { financeService, type GlAccount } from '@/lib/services/finance'
+import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Filter } from 'lucide-react'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ReportView } from '@/components/finance/report-view'
+import { Loader2, RefreshCw, Scale, BookText, FileStack, TrendingUp, Landmark } from 'lucide-react'
 
-function fmt(val: string | number | undefined): string {
-  const n = parseFloat(String(val ?? 0))
-  return isNaN(n) ? '0.00' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function todayStr() {
+  return new Date().toISOString().slice(0, 10)
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  ASSET: 'bg-green-100 text-green-800',
-  LIABILITY: 'bg-red-100 text-red-800',
-  EQUITY: 'bg-purple-100 text-purple-800',
-  INCOME: 'bg-blue-100 text-blue-800',
-  EXPENSE: 'bg-orange-100 text-orange-800',
+function firstOfMonthStr() {
+  const d = new Date()
+  d.setDate(1)
+  return d.toISOString().slice(0, 10)
 }
 
-export default function FinancialReportsPage() {
-  const { user } = useAuth()
-  const [transactions, setTransactions] = useState<FinanceTransaction[]>([])
+const TABS = ['trial-balance', 'ledger', 'statement', 'income-statement', 'balance-sheet'] as const
+type ReportTab = typeof TABS[number]
+
+export default function FinanceReportsPage() {
+  const { can } = useAuth()
+  const [activeTab, setActiveTab] = useState<ReportTab>('trial-balance')
+  const [loadedTabs, setLoadedTabs] = useState<Set<ReportTab>>(new Set())
+
   const [glAccounts, setGlAccounts] = useState<GlAccount[]>([])
-  const [expenses, setExpenses] = useState<FinanceTransaction[]>([])
-  const [budgets, setBudgets] = useState<Budget[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [dateFilter, setDateFilter] = useState({ from: '', to: '' })
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true)
-    const [txns, accts, expns, buds] = await Promise.all([
-      financeService.getTransactions({ limit: 200 }),
-      financeService.getGLAccounts(),
-      financeService.getTransactions({ type: 'EXPENSE', limit: 200 }),
-      financeService.getBudgets(),
-    ])
-    setTransactions(txns.data)
-    setGlAccounts(accts)
-    setExpenses(expns.data)
-    setBudgets(buds)
-    setIsLoading(false)
+  // Trial balance
+  const [trialAsOf, setTrialAsOf] = useState(todayStr())
+  const [trialData, setTrialData] = useState<unknown>(null)
+  const [trialLoading, setTrialLoading] = useState(false)
+
+  // Ledger
+  const [ledgerAccountId, setLedgerAccountId] = useState('')
+  const [ledgerFrom, setLedgerFrom] = useState(firstOfMonthStr())
+  const [ledgerTo, setLedgerTo] = useState(todayStr())
+  const [ledgerData, setLedgerData] = useState<unknown>(null)
+  const [ledgerLoading, setLedgerLoading] = useState(false)
+
+  // Statement
+  const [statementFrom, setStatementFrom] = useState(firstOfMonthStr())
+  const [statementTo, setStatementTo] = useState(todayStr())
+  const [statementData, setStatementData] = useState<unknown>(null)
+  const [statementLoading, setStatementLoading] = useState(false)
+
+  // Income statement
+  const [incomeFrom, setIncomeFrom] = useState(firstOfMonthStr())
+  const [incomeTo, setIncomeTo] = useState(todayStr())
+  const [incomeData, setIncomeData] = useState<unknown>(null)
+  const [incomeLoading, setIncomeLoading] = useState(false)
+
+  // Balance sheet
+  const [balanceAsOf, setBalanceAsOf] = useState(todayStr())
+  const [balanceData, setBalanceData] = useState<unknown>(null)
+  const [balanceLoading, setBalanceLoading] = useState(false)
+
+  useEffect(() => {
+    financeService.getGLAccounts().then(setGlAccounts)
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  const runTrialBalance = useCallback(async () => {
+    setTrialLoading(true)
+    setTrialData(await financeService.getTrialBalance({ asOf: trialAsOf || undefined }))
+    setTrialLoading(false)
+  }, [trialAsOf])
 
-  const filteredTransactions = transactions.filter(t => {
-    if (dateFilter.from && t.date < dateFilter.from) return false
-    if (dateFilter.to && t.date > dateFilter.to) return false
-    return true
-  })
+  const runLedger = useCallback(async () => {
+    if (!ledgerAccountId) return
+    setLedgerLoading(true)
+    setLedgerData(await financeService.getLedger({ glAccountId: ledgerAccountId, from: ledgerFrom || undefined, to: ledgerTo || undefined }))
+    setLedgerLoading(false)
+  }, [ledgerAccountId, ledgerFrom, ledgerTo])
 
-  const filteredExpenses = expenses.filter(e => {
-    if (dateFilter.from && e.date < dateFilter.from) return false
-    if (dateFilter.to && e.date > dateFilter.to) return false
-    return true
-  })
+  const runStatement = useCallback(async () => {
+    setStatementLoading(true)
+    setStatementData(await financeService.getStatement({ from: statementFrom || undefined, to: statementTo || undefined }))
+    setStatementLoading(false)
+  }, [statementFrom, statementTo])
 
-  const totalAssets = glAccounts.filter(a => a.type === 'ASSET').reduce((s, a) => s + parseFloat(a.balance || '0'), 0)
-  const totalLiabilities = glAccounts.filter(a => a.type === 'LIABILITY').reduce((s, a) => s + parseFloat(a.balance || '0'), 0)
-  const totalIncome = glAccounts.filter(a => a.type === 'INCOME').reduce((s, a) => s + parseFloat(a.balance || '0'), 0)
-  const totalExpense = glAccounts.filter(a => a.type === 'EXPENSE').reduce((s, a) => s + parseFloat(a.balance || '0'), 0)
-  const totalAllocated = budgets.reduce((s, b) => s + parseFloat(b.allocatedAmount), 0)
+  const runIncomeStatement = useCallback(async () => {
+    setIncomeLoading(true)
+    setIncomeData(await financeService.getIncomeStatement({ from: incomeFrom || undefined, to: incomeTo || undefined }))
+    setIncomeLoading(false)
+  }, [incomeFrom, incomeTo])
 
-  if (isLoading) {
-    return <OverviewPageSkeleton />
-  }
+  const runBalanceSheet = useCallback(async () => {
+    setBalanceLoading(true)
+    setBalanceData(await financeService.getBalanceSheet({ asOf: balanceAsOf || undefined }))
+    setBalanceLoading(false)
+  }, [balanceAsOf])
+
+  // Lazily run each report the first time its tab is opened.
+  useEffect(() => {
+    if (loadedTabs.has(activeTab)) return
+    setLoadedTabs(prev => new Set(prev).add(activeTab))
+    if (activeTab === 'trial-balance') runTrialBalance()
+    else if (activeTab === 'statement') runStatement()
+    else if (activeTab === 'income-statement') runIncomeStatement()
+    else if (activeTab === 'balance-sheet') runBalanceSheet()
+    // Ledger needs an account first — left for the user to trigger explicitly.
+  }, [activeTab, loadedTabs, runTrialBalance, runStatement, runIncomeStatement, runBalanceSheet])
+
+  if (!can('finance.report.read')) return <AccessDenied />
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Financial Reports</h1>
-        <p className="text-muted-foreground">View financial statements and transaction history</p>
-      </div>
+      <PageHeader title="Financial Reports" description="Trial balance, ledger, and financial statements" />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total Assets</p>
-            <p className="text-2xl font-bold text-blue-600">{money(totalAssets)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{glAccounts.filter(a => a.type === 'ASSET').length} accounts</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total Liabilities</p>
-            <p className="text-2xl font-bold text-red-600">{money(totalLiabilities)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{glAccounts.filter(a => a.type === 'LIABILITY').length} accounts</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total Income</p>
-            <p className="text-2xl font-bold text-green-600">{money(totalIncome)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{glAccounts.filter(a => a.type === 'INCOME').length} accounts</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total Expenses</p>
-            <p className="text-2xl font-bold text-orange-600">{money(totalExpense)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{glAccounts.filter(a => a.type === 'EXPENSE').length} accounts</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="accounts" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="accounts">GL Accounts</TabsTrigger>
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="budgets">Budgets</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as ReportTab)}>
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="trial-balance" className="gap-2"><Scale className="h-4 w-4" />Trial Balance</TabsTrigger>
+          <TabsTrigger value="ledger" className="gap-2"><BookText className="h-4 w-4" />General Ledger</TabsTrigger>
+          <TabsTrigger value="statement" className="gap-2"><FileStack className="h-4 w-4" />Statement</TabsTrigger>
+          <TabsTrigger value="income-statement" className="gap-2"><TrendingUp className="h-4 w-4" />Income Statement</TabsTrigger>
+          <TabsTrigger value="balance-sheet" className="gap-2"><Landmark className="h-4 w-4" />Balance Sheet</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="accounts">
+        {/* Trial Balance */}
+        <TabsContent value="trial-balance" className="space-y-4 mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>General Ledger Accounts</CardTitle>
-              <CardDescription>All active GL accounts and their balances</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {glAccounts.filter(a => a.isActive).length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No active accounts</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {glAccounts.filter(a => a.isActive).sort((a, b) => a.type.localeCompare(b.type)).map(a => (
-                      <TableRow key={a.id}>
-                        <TableCell className="font-mono font-semibold">{a.code}</TableCell>
-                        <TableCell>{a.name}</TableCell>
-                        <TableCell><Badge className={TYPE_COLORS[a.type]}>{a.type}</Badge></TableCell>
-                        <TableCell className="text-right font-semibold">{money(a.balance)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="transactions">
-          <Card>
-            <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-              <CardDescription>All journal entries and transactions</CardDescription>
-              <div className="flex gap-4 mt-4">
-                <div className="flex-1">
-                  <Label className="text-xs">From Date</Label>
-                  <Input type="date" value={dateFilter.from} onChange={e => setDateFilter(f => ({ ...f, from: e.target.value }))} />
-                </div>
-                <div className="flex-1">
-                  <Label className="text-xs">To Date</Label>
-                  <Input type="date" value={dateFilter.to} onChange={e => setDateFilter(f => ({ ...f, to: e.target.value }))} />
-                </div>
-                <div className="flex items-end">
-                  <Button size="sm" variant="outline" onClick={() => setDateFilter({ from: '', to: '' })}>
-                    <Filter className="h-4 w-4 mr-1" /> Clear
-                  </Button>
-                </div>
+            <CardContent className="pt-6 flex flex-wrap items-end gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="trial-as-of">As of</Label>
+                <Input id="trial-as-of" type="date" value={trialAsOf} onChange={e => setTrialAsOf(e.target.value)} className="w-44" />
               </div>
-            </CardHeader>
-            <CardContent>
-              {filteredTransactions.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No transactions found</p>
+              <Button onClick={runTrialBalance} disabled={trialLoading}>
+                {trialLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Run Report
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              {trialLoading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Reference</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTransactions.map(t => (
-                      <TableRow key={t.id}>
-                        <TableCell className="text-sm">{t.date}</TableCell>
-                        <TableCell><Badge variant="outline">{t.type}</Badge></TableCell>
-                        <TableCell className="font-medium">{t.description}</TableCell>
-                        <TableCell className="text-muted-foreground">{t.categoryAccount?.name ?? '—'}</TableCell>
-                        <TableCell className="text-right font-semibold">{money(t.amount)}</TableCell>
-                        <TableCell><Badge variant="outline">{t.status}</Badge></TableCell>
-                        <TableCell className="font-mono text-sm">{t.reference}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <ReportView data={trialData} />
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="expenses">
+        {/* General Ledger */}
+        <TabsContent value="ledger" className="space-y-4 mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Expense Summary</CardTitle>
-              <CardDescription>All expense transactions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {filteredExpenses.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No expenses found</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredExpenses.map(e => (
-                      <TableRow key={e.id}>
-                        <TableCell className="text-sm">{e.date}</TableCell>
-                        <TableCell className="max-w-xs truncate font-medium">{e.description}</TableCell>
-                        <TableCell>{e.categoryAccount?.name ? <Badge variant="outline" className="text-xs">{e.categoryAccount.name}</Badge> : '—'}</TableCell>
-                        <TableCell className="text-right font-semibold">{money(e.amount)}</TableCell>
-                        <TableCell><Badge variant="outline">{e.status}</Badge></TableCell>
-                      </TableRow>
+            <CardContent className="pt-6 flex flex-wrap items-end gap-4">
+              <div className="space-y-1.5 min-w-[220px]">
+                <Label htmlFor="ledger-account">GL Account</Label>
+                <Select value={ledgerAccountId} onValueChange={setLedgerAccountId}>
+                  <SelectTrigger id="ledger-account"><SelectValue placeholder="Select an account..." /></SelectTrigger>
+                  <SelectContent>
+                    {glAccounts.map(a => (
+                      <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>
                     ))}
-                  </TableBody>
-                </Table>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ledger-from">From</Label>
+                <Input id="ledger-from" type="date" value={ledgerFrom} onChange={e => setLedgerFrom(e.target.value)} className="w-44" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ledger-to">To</Label>
+                <Input id="ledger-to" type="date" value={ledgerTo} onChange={e => setLedgerTo(e.target.value)} className="w-44" />
+              </div>
+              <Button onClick={runLedger} disabled={ledgerLoading || !ledgerAccountId}>
+                {ledgerLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Run Report
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              {ledgerLoading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : !ledgerAccountId ? (
+                <p className="text-sm text-muted-foreground text-center py-10">Select a GL account to view its ledger.</p>
+              ) : (
+                <ReportView data={ledgerData} />
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="budgets">
+        {/* Statement */}
+        <TabsContent value="statement" className="space-y-4 mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Budget Overview</CardTitle>
-              <CardDescription>Budget allocation summary</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {budgets.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No budgets created</p>
+            <CardContent className="pt-6 flex flex-wrap items-end gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="statement-from">From</Label>
+                <Input id="statement-from" type="date" value={statementFrom} onChange={e => setStatementFrom(e.target.value)} className="w-44" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="statement-to">To</Label>
+                <Input id="statement-to" type="date" value={statementTo} onChange={e => setStatementTo(e.target.value)} className="w-44" />
+              </div>
+              <Button onClick={runStatement} disabled={statementLoading}>
+                {statementLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Run Report
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              {statementLoading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 rounded-lg bg-blue-50">
-                      <p className="text-xs text-muted-foreground">Total Allocated</p>
-                      <p className="text-lg font-bold text-blue-600">{money(totalAllocated)}</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-gray-50">
-                      <p className="text-xs text-muted-foreground">Total Budgets</p>
-                      <p className="text-lg font-bold">{budgets.length}</p>
-                    </div>
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>GL Account</TableHead>
-                        <TableHead className="text-right">Allocated</TableHead>
-                        <TableHead>Start</TableHead>
-                        <TableHead>End</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {budgets.map(b => (
-                        <TableRow key={b.id}>
-                          <TableCell className="font-medium">{b.name}</TableCell>
-                          <TableCell className="font-mono text-sm">{b.glAccountId.slice(-8)}</TableCell>
-                          <TableCell className="text-right font-semibold">{money(b.allocatedAmount)}</TableCell>
-                          <TableCell>{b.startDate}</TableCell>
-                          <TableCell>{b.endDate}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <ReportView data={statementData} />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Income Statement */}
+        <TabsContent value="income-statement" className="space-y-4 mt-4">
+          <Card>
+            <CardContent className="pt-6 flex flex-wrap items-end gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="income-from">From</Label>
+                <Input id="income-from" type="date" value={incomeFrom} onChange={e => setIncomeFrom(e.target.value)} className="w-44" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="income-to">To</Label>
+                <Input id="income-to" type="date" value={incomeTo} onChange={e => setIncomeTo(e.target.value)} className="w-44" />
+              </div>
+              <Button onClick={runIncomeStatement} disabled={incomeLoading}>
+                {incomeLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Run Report
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              {incomeLoading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <ReportView data={incomeData} />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Balance Sheet */}
+        <TabsContent value="balance-sheet" className="space-y-4 mt-4">
+          <Card>
+            <CardContent className="pt-6 flex flex-wrap items-end gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="balance-as-of">As of</Label>
+                <Input id="balance-as-of" type="date" value={balanceAsOf} onChange={e => setBalanceAsOf(e.target.value)} className="w-44" />
+              </div>
+              <Button onClick={runBalanceSheet} disabled={balanceLoading}>
+                {balanceLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Run Report
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              {balanceLoading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <ReportView data={balanceData} />
               )}
             </CardContent>
           </Card>

@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { authService, type LoginCredentials, type ApiTenant } from '@/lib/services/auth'
 import { tokenStore } from '@/lib/services/api-client'
 import { brandingService, type TenantBranding } from '@/lib/services/branding'
+import { tenantThemeStyle } from '@/lib/utils/theme'
 import type { User } from '@/lib/types'
 
 interface AuthContextType {
@@ -118,7 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshUser,
       }}
     >
-      {children}
+      <div style={tenantThemeStyle(branding?.theme)}>
+        {children}
+      </div>
     </AuthContext.Provider>
   )
 }
