@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
 import { getTenantSlug } from '@/lib/tenant'
 import { brandingService, type TenantBranding } from '@/lib/services/branding'
+import { tenantThemeStyle } from '@/lib/utils/theme'
+import { formatAddress, hasContactInfo } from '@/lib/utils/contact'
+import { useMapEmbedUrl } from '@/hooks/use-map-embed'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { GraduationCap, Loader2, Eye, EyeOff, Mail, Lock, BookOpen, DollarSign, Users, ClipboardList, ArrowRight } from 'lucide-react'
+import { GraduationCap, Loader2, Eye, EyeOff, Mail, Lock, BookOpen, DollarSign, Users, ClipboardList, ArrowRight, MapPin, Phone } from 'lucide-react'
 
 const FEATURES = [
   { icon: BookOpen, title: 'Academics', desc: 'Classes & timetables' },
@@ -44,6 +47,9 @@ export default function LoginPage() {
   const schoolName = branding?.name || tenantSlug?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Mudir'
   const logoUrl = tenantSlug ? brandingService.logoUrl(tenantSlug, branding?.brandingUpdatedAt) : null
   const hasLogo = Boolean(branding?.logoUrl)
+  const formattedAddress = formatAddress(branding?.address)
+  const showContact = hasContactInfo(branding?.contact, branding?.address)
+  const mapEmbedUrl = useMapEmbedUrl(branding?.address)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,7 +68,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex" style={tenantThemeStyle(branding?.theme)}>
       {/* Left side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-sidebar items-center justify-center p-12">
         {/* Decorative glow accents */}
@@ -102,6 +108,43 @@ export default function LoginPage() {
               </div>
             ))}
           </div>
+
+          {showContact && (
+            <div className="mt-6 pt-6 border-t border-sidebar-border/60 flex flex-col items-center gap-2 text-xs text-sidebar-foreground/60">
+              {formattedAddress && (
+                <div className="flex items-center gap-1.5 text-center">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span>{formattedAddress}</span>
+                  {!mapEmbedUrl && branding?.address?.googleMapsUrl && (
+                    <a
+                      href={branding.address.googleMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-sidebar-primary hover:opacity-80"
+                    >
+                      View map →
+                    </a>
+                  )}
+                </div>
+              )}
+              {branding?.contact?.phone && (
+                <div className="flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 shrink-0" />
+                  <span>{branding.contact.phone}</span>
+                </div>
+              )}
+              {mapEmbedUrl && (
+                <div className="w-full mt-2 rounded-xl overflow-hidden border border-sidebar-border/60 h-28">
+                  <iframe
+                    src={mapEmbedUrl}
+                    loading="lazy"
+                    title={`Map showing ${schoolName}`}
+                    className="w-full h-full border-0 block"
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

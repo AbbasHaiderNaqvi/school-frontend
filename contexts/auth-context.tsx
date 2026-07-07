@@ -3,11 +3,13 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { authService, type LoginCredentials, type ApiTenant } from '@/lib/services/auth'
 import { tokenStore } from '@/lib/services/api-client'
+import { brandingService, type TenantBranding } from '@/lib/services/branding'
 import type { User } from '@/lib/types'
 
 interface AuthContextType {
   user: User | null
   tenant: ApiTenant | null
+  branding: TenantBranding | null
   features: Record<string, boolean>
   permissions: string[]
   isLoading: boolean
@@ -38,6 +40,7 @@ const DEFAULT_FEATURES: Record<string, boolean> = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [tenant, setTenant] = useState<ApiTenant | null>(null)
+  const [branding, setBranding] = useState<TenantBranding | null>(null)
   const [features, setFeatures] = useState<Record<string, boolean>>(DEFAULT_FEATURES)
   const [permissions, setPermissions] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -50,11 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTenant(session.tenant ?? null)
       setFeatures(session.features ?? DEFAULT_FEATURES)
       setPermissions(session.permissions ?? [])
+      brandingService.getBranding().then(setBranding)
     } else {
       setUser(null)
       setTenant(null)
       setFeatures(DEFAULT_FEATURES)
       setPermissions([])
+      setBranding(null)
     }
 
     setIsLoading(false)
@@ -73,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTenant(result.tenant ?? null)
       setFeatures(result.features ?? DEFAULT_FEATURES)
       setPermissions(result.permissions ?? [])
+      brandingService.getBranding().then(setBranding)
     }
 
     setIsLoading(false)
@@ -83,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.logout()
     setUser(null)
     setTenant(null)
+    setBranding(null)
     setFeatures(DEFAULT_FEATURES)
     setPermissions([])
   }
@@ -99,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         tenant,
+        branding,
         features,
         permissions,
         isLoading,

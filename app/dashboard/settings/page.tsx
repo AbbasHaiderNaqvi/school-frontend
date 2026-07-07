@@ -6,7 +6,6 @@ import { tenantService, authService } from '@/lib/services'
 import { brandingService, type TenantBranding } from '@/lib/services/branding'
 import { AccessControlPanel } from '@/components/settings/access-control-panel'
 import { currencyService, CURRENCIES } from '@/lib/utils/currency'
-import type { Tenant, TenantContactInfo } from '@/lib/types'
 import { PageHeader } from '@/components/layout/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -33,7 +32,9 @@ import {
   Mail,
   Phone,
   Globe,
-  MapPin,
+  MessageCircle,
+  Send,
+  Printer,
   Settings as SettingsIcon,
   Shield,
   ShieldCheck,
@@ -50,26 +51,65 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="flex gap-2">
+        <input
+          type="color"
+          value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000'}
+          onChange={e => onChange(e.target.value)}
+          className="h-9 w-11 rounded-md border cursor-pointer shrink-0"
+        />
+        <Input value={value} onChange={e => onChange(e.target.value)} placeholder="#4F46E5" className="font-mono" />
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
-  const { user, tenant, refreshTenant } = useAuth()
+  const { user, tenant } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [isSavingDetails, setIsSavingDetails] = useState(false)
-  const [isSavingContact, setIsSavingContact] = useState(false)
-  const [isSavingBranding, setIsSavingBranding] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [activeTab, setActiveTab] = useState('profile')
 
-  // Branding state
+  const isAdmin = ['super_admin', 'tenant_owner', 'tenant_admin', 'tenant_principal'].includes(user?.role || '')
+  const isOwner = user?.role === 'tenant_owner'
+
+  // Organization form — everything here saves through the single /tenant/branding
+  // endpoint, so it's kept as one form with one save action rather than split
+  // across several disconnected mini-forms.
   const [branding, setBranding] = useState<TenantBranding | null>(null)
-  const [brandingDescription, setBrandingDescription] = useState('')
+  const [orgForm, setOrgForm] = useState({
+    name: '',
+    description: '',
+    email: '',
+    phone: '',
+    whatsapp: '',
+    telegram: '',
+    websiteUrl: '',
+    fax: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: '',
+    googleMapsUrl: '',
+    primaryColor: '',
+    secondaryColor: '',
+    backgroundColor: '',
+  })
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [faviconFile, setFaviconFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [faviconPreview, setFaviconPreview] = useState<string | null>(null)
-  const [brandingSaved, setBrandingSaved] = useState(false)
-  const [brandingError, setBrandingError] = useState<string | null>(null)
+  const [isSavingOrg, setIsSavingOrg] = useState(false)
+  const [orgSaved, setOrgSaved] = useState(false)
+  const [orgError, setOrgError] = useState<string | null>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const faviconInputRef = useRef<HTMLInputElement>(null)
 
@@ -85,29 +125,6 @@ export default function SettingsPage() {
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
-  })
-
-  // Tenant details state (for tenant admin)
-  const [tenantData, setTenantData] = useState<Partial<Tenant>>({
-    name: '',
-    logo: '',
-    subdomain: '',
-  })
-
-  // Contact info state
-  const [contactInfo, setContactInfo] = useState<TenantContactInfo>({
-    email: '',
-    phone: '',
-    whatsapp: '',
-    website: '',
-    address: {
-      street: '',
-      city: '',
-      state: '',
-      country: '',
-      postalCode: '',
-    },
-    googleMapsLink: '',
   })
 
   // Settings state
@@ -137,44 +154,51 @@ export default function SettingsPage() {
       })
     }
     if (tenant) {
-      setTenantData({
-        name: tenant.name,
-        logo: tenant.logo || '',
-        subdomain: tenant.subdomain,
-      })
-      setContactInfo(tenant.contactInfo || {
-        email: '',
-        phone: '',
-        whatsapp: '',
-        website: '',
-        address: { street: '', city: '', state: '', country: '', postalCode: '' },
-        googleMapsLink: '',
-      })
+      setOrgForm(prev => ({ ...prev, name: prev.name || tenant.name }))
     }
   }, [user, tenant])
 
-  // Load branding on mount (tenant owner only)
+  // Load organization profile on mount (admin roles only)
   useEffect(() => {
-    if (user?.role !== 'tenant_owner') return
+    if (!isAdmin) return
     brandingService.getBranding().then(data => {
-      if (data) {
-        setBranding(data)
-        setBrandingDescription(data.description || '')
-        if (data.logoUrl) setLogoPreview(data.logoUrl)
-        if (data.faviconUrl) setFaviconPreview(data.faviconUrl)
-      }
+      if (!data) return
+      setBranding(data)
+      setOrgForm(prev => ({
+        ...prev,
+        name: data.name || prev.name,
+        description: data.description || '',
+        email: data.contact?.email || '',
+        phone: data.contact?.phone || '',
+        whatsapp: data.contact?.whatsapp || '',
+        telegram: data.contact?.telegram || '',
+        websiteUrl: data.contact?.websiteUrl || '',
+        fax: data.contact?.fax || '',
+        addressLine1: data.address?.line1 || '',
+        addressLine2: data.address?.line2 || '',
+        city: data.address?.city || '',
+        state: data.address?.state || '',
+        postalCode: data.address?.postalCode || '',
+        country: data.address?.country || '',
+        googleMapsUrl: data.address?.googleMapsUrl || '',
+        primaryColor: data.theme?.primaryColor || '',
+        secondaryColor: data.theme?.secondaryColor || '',
+        backgroundColor: data.theme?.backgroundColor || '',
+      }))
+      if (data.logoUrl) setLogoPreview(data.logoUrl)
+      if (data.faviconUrl) setFaviconPreview(data.faviconUrl)
     })
-  }, [user?.role])
+  }, [isAdmin])
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 2 * 1024 * 1024) {
-      setBrandingError('Logo must be under 2 MB.')
+      setOrgError('Logo must be under 2 MB.')
       e.target.value = ''
       return
     }
-    setBrandingError(null)
+    setOrgError(null)
     setLogoFile(file)
     setLogoPreview(URL.createObjectURL(file))
   }
@@ -183,11 +207,11 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 256 * 1024) {
-      setBrandingError('Favicon must be under 256 KB.')
+      setOrgError('Favicon must be under 256 KB.')
       e.target.value = ''
       return
     }
-    setBrandingError(null)
+    setOrgError(null)
     setFaviconFile(file)
     setFaviconPreview(URL.createObjectURL(file))
   }
@@ -208,12 +232,31 @@ export default function SettingsPage() {
     if (faviconInputRef.current) faviconInputRef.current.value = ''
   }
 
-  const handleSaveBranding = async () => {
-    setIsSavingBranding(true)
-    setBrandingSaved(false)
-    setBrandingError(null)
+  const handleSaveOrganization = async () => {
+    setIsSavingOrg(true)
+    setOrgSaved(false)
+    setOrgError(null)
     const result = await brandingService.updateBranding({
-      description: brandingDescription,
+      name: orgForm.name,
+      description: orgForm.description,
+      email: orgForm.email || undefined,
+      phone: orgForm.phone || undefined,
+      whatsapp: orgForm.whatsapp || undefined,
+      telegram: orgForm.telegram || undefined,
+      websiteUrl: orgForm.websiteUrl || undefined,
+      fax: orgForm.fax || undefined,
+      addressLine1: orgForm.addressLine1 || undefined,
+      addressLine2: orgForm.addressLine2 || undefined,
+      city: orgForm.city || undefined,
+      state: orgForm.state || undefined,
+      postalCode: orgForm.postalCode || undefined,
+      country: orgForm.country || undefined,
+      googleMapsUrl: orgForm.googleMapsUrl || undefined,
+      theme: {
+        primaryColor: orgForm.primaryColor || undefined,
+        secondaryColor: orgForm.secondaryColor || undefined,
+        backgroundColor: orgForm.backgroundColor || undefined,
+      },
       logo: logoFile,
       favicon: faviconFile,
     })
@@ -222,12 +265,12 @@ export default function SettingsPage() {
       setFaviconFile(null)
       if (result.data?.logoUrl) setLogoPreview(result.data.logoUrl)
       if (result.data?.faviconUrl) setFaviconPreview(result.data.faviconUrl)
-      setBrandingSaved(true)
-      setTimeout(() => setBrandingSaved(false), 3000)
+      setOrgSaved(true)
+      setTimeout(() => setOrgSaved(false), 3000)
     } else {
-      setBrandingError(result.error || 'Failed to save branding.')
+      setOrgError(result.error || 'Failed to save organization details.')
     }
-    setIsSavingBranding(false)
+    setIsSavingOrg(false)
   }
 
   const handleSaveProfile = async () => {
@@ -256,36 +299,12 @@ export default function SettingsPage() {
     alert('Password updated successfully')
   }
 
-  const handleSaveOrgDetails = async () => {
-    if (!tenant) return
-    setIsSavingDetails(true)
-    await tenantService.update(tenant.id, {
-      name: tenantData.name,
-      logo: tenantData.logo,
-      subdomain: tenantData.subdomain,
-    })
-    refreshTenant?.()
-    setIsSavingDetails(false)
-  }
-
-  const handleSaveContactInfo = async () => {
-    if (!tenant) return
-    setIsSavingContact(true)
-    await tenantService.updateContactInfo(tenant.id, contactInfo)
-    refreshTenant?.()
-    setIsSavingContact(false)
-  }
-
   const handleSaveSettings = async () => {
     if (!tenant) return
     setIsSaving(true)
     await tenantService.updateSettings(tenant.id, settings)
-    refreshTenant?.()
     setIsSaving(false)
   }
-
-  const isAdmin = ['super_admin', 'tenant_owner', 'tenant_admin', 'tenant_principal'].includes(user?.role || '')
-  const isOwner = user?.role === 'tenant_owner'
 
   return (
     <div className="space-y-6">
@@ -495,11 +514,11 @@ export default function SettingsPage() {
         {isAdmin && (
           <TabsContent value="organization" className="space-y-6">
 
-            {/* Organization Details */}
+            {/* Basic Information */}
             <Card>
               <CardHeader>
-                <CardTitle>Organization Details</CardTitle>
-                <CardDescription>Update your school name and subdomain</CardDescription>
+                <CardTitle>Basic Information</CardTitle>
+                <CardDescription>Your school's name, subdomain, and public description</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -507,8 +526,8 @@ export default function SettingsPage() {
                     <Label htmlFor="org-name">Organization Name</Label>
                     <Input
                       id="org-name"
-                      value={tenantData.name}
-                      onChange={e => setTenantData(prev => ({ ...prev, name: e.target.value }))}
+                      value={orgForm.name}
+                      onChange={e => setOrgForm(prev => ({ ...prev, name: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
@@ -527,12 +546,15 @@ export default function SettingsPage() {
                     <p className="text-xs text-muted-foreground">Subdomain cannot be changed</p>
                   </div>
                 </div>
-                <div className="flex justify-end">
-                  <Button onClick={handleSaveOrgDetails} disabled={isSavingDetails}>
-                    {isSavingDetails && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Details
-                  </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="org-description">School Description</Label>
+                  <Textarea
+                    id="org-description"
+                    placeholder="A brief tagline shown on your public landing page…"
+                    value={orgForm.description}
+                    onChange={e => setOrgForm(prev => ({ ...prev, description: e.target.value }))}
+                    rows={3}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -542,7 +564,7 @@ export default function SettingsPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Branding</CardTitle>
-                  <CardDescription>Logo, favicon, and description shown on your public page</CardDescription>
+                  <CardDescription>Logo and favicon shown on your public page and browser tab</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
 
@@ -609,40 +631,62 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            )}
 
-                  <Separator />
-
-                  {/* Description */}
-                  <div className="space-y-2">
-                    <Label htmlFor="org-branding-desc" className="text-sm font-medium">School Description</Label>
-                    <Textarea
-                      id="org-branding-desc"
-                      placeholder="A brief tagline shown on your public landing page…"
-                      value={brandingDescription}
-                      onChange={e => setBrandingDescription(e.target.value)}
-                      rows={3}
+            {/* Theme — tenant owner only */}
+            {isOwner && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Theme</CardTitle>
+                  <CardDescription>Colors used on your public landing page and login page</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <ColorField
+                      label="Primary Color"
+                      value={orgForm.primaryColor}
+                      onChange={v => setOrgForm(prev => ({ ...prev, primaryColor: v }))}
+                    />
+                    <ColorField
+                      label="Secondary Color"
+                      value={orgForm.secondaryColor}
+                      onChange={v => setOrgForm(prev => ({ ...prev, secondaryColor: v }))}
+                    />
+                    <ColorField
+                      label="Background Color"
+                      value={orgForm.backgroundColor}
+                      onChange={v => setOrgForm(prev => ({ ...prev, backgroundColor: v }))}
                     />
                   </div>
 
-                  {brandingError && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{brandingError}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  {brandingSaved && (
-                    <Alert className="border-green-200 bg-green-50 text-green-800">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <AlertDescription>Branding saved successfully.</AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="flex justify-end">
-                    <Button onClick={handleSaveBranding} disabled={isSavingBranding}>
-                      {isSavingBranding && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Branding
-                    </Button>
+                  <div
+                    className="rounded-lg border p-5 flex items-center justify-between gap-4"
+                    style={{ background: orgForm.backgroundColor || undefined }}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: orgForm.backgroundColor ? '#fff' : undefined }}>
+                        {orgForm.name || 'Your School'}
+                      </p>
+                      <p className="text-xs opacity-70" style={{ color: orgForm.backgroundColor ? '#fff' : undefined }}>
+                        Live preview
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <span
+                        className="rounded-md px-4 py-2 text-sm font-semibold"
+                        style={{ background: orgForm.primaryColor || 'var(--primary)', color: '#fff' }}
+                      >
+                        Login
+                      </span>
+                      <span
+                        className="rounded-md px-4 py-2 text-sm font-semibold"
+                        style={{ background: orgForm.secondaryColor || 'var(--secondary)', color: '#fff' }}
+                      >
+                        Explore
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -664,8 +708,8 @@ export default function SettingsPage() {
                     <Input
                       id="contact-email"
                       type="email"
-                      value={contactInfo.email}
-                      onChange={e => setContactInfo(prev => ({ ...prev, email: e.target.value }))}
+                      value={orgForm.email}
+                      onChange={e => setOrgForm(prev => ({ ...prev, email: e.target.value }))}
                       placeholder="info@school.edu"
                     />
                   </div>
@@ -676,21 +720,33 @@ export default function SettingsPage() {
                     </Label>
                     <Input
                       id="contact-phone"
-                      value={contactInfo.phone}
-                      onChange={e => setContactInfo(prev => ({ ...prev, phone: e.target.value }))}
+                      value={orgForm.phone}
+                      onChange={e => setOrgForm(prev => ({ ...prev, phone: e.target.value }))}
                       placeholder="+1 (555) 123-4567"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="whatsapp">
-                      <Phone className="h-4 w-4 inline mr-2" />
+                      <MessageCircle className="h-4 w-4 inline mr-2" />
                       WhatsApp Number
                     </Label>
                     <Input
                       id="whatsapp"
-                      value={contactInfo.whatsapp}
-                      onChange={e => setContactInfo(prev => ({ ...prev, whatsapp: e.target.value }))}
+                      value={orgForm.whatsapp}
+                      onChange={e => setOrgForm(prev => ({ ...prev, whatsapp: e.target.value }))}
                       placeholder="+1 (555) 123-4567"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="telegram">
+                      <Send className="h-4 w-4 inline mr-2" />
+                      Telegram
+                    </Label>
+                    <Input
+                      id="telegram"
+                      value={orgForm.telegram}
+                      onChange={e => setOrgForm(prev => ({ ...prev, telegram: e.target.value }))}
+                      placeholder="@yourschool"
                     />
                   </div>
                   <div className="space-y-2">
@@ -701,106 +757,127 @@ export default function SettingsPage() {
                     <Input
                       id="website"
                       type="url"
-                      value={contactInfo.website}
-                      onChange={e => setContactInfo(prev => ({ ...prev, website: e.target.value }))}
+                      value={orgForm.websiteUrl}
+                      onChange={e => setOrgForm(prev => ({ ...prev, websiteUrl: e.target.value }))}
                       placeholder="https://school.edu"
                     />
                   </div>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-4">
-                  <h4 className="font-medium text-foreground flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Address
-                  </h4>
                   <div className="space-y-2">
-                    <Label htmlFor="street">Street Address</Label>
-                    <Input
-                      id="street"
-                      value={contactInfo.address.street}
-                      onChange={e => setContactInfo(prev => ({
-                        ...prev,
-                        address: { ...prev.address, street: e.target.value }
-                      }))}
-                      placeholder="123 Education Lane"
-                    />
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="city">City</Label>
-                      <Input
-                        id="city"
-                        value={contactInfo.address.city}
-                        onChange={e => setContactInfo(prev => ({
-                          ...prev,
-                          address: { ...prev.address, city: e.target.value }
-                        }))}
-                        placeholder="Springfield"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="state">State/Province</Label>
-                      <Input
-                        id="state"
-                        value={contactInfo.address.state}
-                        onChange={e => setContactInfo(prev => ({
-                          ...prev,
-                          address: { ...prev.address, state: e.target.value }
-                        }))}
-                        placeholder="Illinois"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="country">Country</Label>
-                      <Input
-                        id="country"
-                        value={contactInfo.address.country}
-                        onChange={e => setContactInfo(prev => ({
-                          ...prev,
-                          address: { ...prev.address, country: e.target.value }
-                        }))}
-                        placeholder="United States"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="postal">Postal Code</Label>
-                      <Input
-                        id="postal"
-                        value={contactInfo.address.postalCode}
-                        onChange={e => setContactInfo(prev => ({
-                          ...prev,
-                          address: { ...prev.address, postalCode: e.target.value }
-                        }))}
-                        placeholder="62701"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="maps-link">
-                      <ExternalLink className="h-4 w-4 inline mr-2" />
-                      Google Maps Link (optional)
+                    <Label htmlFor="fax">
+                      <Printer className="h-4 w-4 inline mr-2" />
+                      Fax Number
                     </Label>
                     <Input
-                      id="maps-link"
-                      type="url"
-                      value={contactInfo.googleMapsLink}
-                      onChange={e => setContactInfo(prev => ({ ...prev, googleMapsLink: e.target.value }))}
-                      placeholder="https://maps.google.com/?q=..."
+                      id="fax"
+                      value={orgForm.fax}
+                      onChange={e => setOrgForm(prev => ({ ...prev, fax: e.target.value }))}
+                      placeholder="+1 (555) 123-4567"
                     />
                   </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSaveContactInfo} disabled={isSavingContact}>
-                    {isSavingContact && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Contact Info
-                  </Button>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Address */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Address</CardTitle>
+                <CardDescription>Your school's physical location</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="address-line1">Address Line 1</Label>
+                  <Input
+                    id="address-line1"
+                    value={orgForm.addressLine1}
+                    onChange={e => setOrgForm(prev => ({ ...prev, addressLine1: e.target.value }))}
+                    placeholder="123 Education Lane"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="address-line2">Address Line 2 (optional)</Label>
+                  <Input
+                    id="address-line2"
+                    value={orgForm.addressLine2}
+                    onChange={e => setOrgForm(prev => ({ ...prev, addressLine2: e.target.value }))}
+                    placeholder="Suite 200"
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={orgForm.city}
+                      onChange={e => setOrgForm(prev => ({ ...prev, city: e.target.value }))}
+                      placeholder="Springfield"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State/Province</Label>
+                    <Input
+                      id="state"
+                      value={orgForm.state}
+                      onChange={e => setOrgForm(prev => ({ ...prev, state: e.target.value }))}
+                      placeholder="Illinois"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="postal">Postal Code</Label>
+                    <Input
+                      id="postal"
+                      value={orgForm.postalCode}
+                      onChange={e => setOrgForm(prev => ({ ...prev, postalCode: e.target.value }))}
+                      placeholder="62701"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country Code</Label>
+                    <Input
+                      id="country"
+                      value={orgForm.country}
+                      onChange={e => setOrgForm(prev => ({ ...prev, country: e.target.value.toUpperCase() }))}
+                      placeholder="PK"
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maps-link">
+                    <ExternalLink className="h-4 w-4 inline mr-2" />
+                    Google Maps Link (optional)
+                  </Label>
+                  <Input
+                    id="maps-link"
+                    type="url"
+                    value={orgForm.googleMapsUrl}
+                    onChange={e => setOrgForm(prev => ({ ...prev, googleMapsUrl: e.target.value }))}
+                    placeholder="https://maps.google.com/?q=..."
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {orgError && (
+              <Alert variant="destructive">
+                <AlertDescription>{orgError}</AlertDescription>
+              </Alert>
+            )}
+
+            {orgSaved && (
+              <Alert className="border-green-200 bg-green-50 text-green-800">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>Organization details saved successfully.</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex justify-end">
+              <Button onClick={handleSaveOrganization} disabled={isSavingOrg}>
+                {isSavingOrg && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </Button>
+            </div>
           </TabsContent>
         )}
 

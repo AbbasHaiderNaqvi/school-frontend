@@ -167,7 +167,7 @@ const navItems: NavItem[] = [
 
 function SidebarBody({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname()
-  const { user, tenant, features, logout } = useAuth()
+  const { user, tenant, branding, features, logout } = useAuth()
   const [openItems, setOpenItems] = useState<string[]>([])
 
   const toggleItem = (title: string) => {
@@ -258,11 +258,12 @@ function SidebarBody({ onLinkClick }: { onLinkClick?: () => void }) {
         {tenant ? (
           <>
             <div className="w-10 h-10 rounded-lg bg-sidebar-accent flex items-center justify-center overflow-hidden shrink-0">
-              {tenant.logo ? (
+              {branding?.logoUrl ? (
                 <img
-                  src={tenant.logo || "/placeholder.svg"}
+                  src={branding.logoUrl}
                   alt={tenant.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain p-1"
+                  onError={e => { e.currentTarget.style.display = 'none' }}
                 />
               ) : (
                 <span className="text-lg font-bold text-sidebar-foreground">
@@ -271,7 +272,7 @@ function SidebarBody({ onLinkClick }: { onLinkClick?: () => void }) {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="font-bold text-sidebar-foreground truncate">{tenant.name}</h1>
+              <h1 className="font-bold text-sidebar-foreground truncate">{branding?.name || tenant.name}</h1>
               <p className="text-xs text-sidebar-foreground/60">School ERP</p>
             </div>
           </>
@@ -287,24 +288,6 @@ function SidebarBody({ onLinkClick }: { onLinkClick?: () => void }) {
           </>
         )}
       </div>
-
-      {/* Tenant contact info badge (if admin) */}
-      {tenant && tenant.contactInfo?.email && ['admin', 'principal', 'tenant_owner'].includes(user?.role || '') && (
-        <div className="px-4 py-2 border-b border-sidebar-border">
-          <div className="px-3 py-2 rounded-lg bg-sidebar-accent/30 space-y-1">
-            <div className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
-              <Building2 className="h-3 w-3 flex-shrink-0" />
-              <span className="truncate">{tenant.contactInfo.email}</span>
-            </div>
-            {tenant.contactInfo.phone && (
-              <div className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
-                <span className="w-3 text-center">P</span>
-                <span className="truncate">{tenant.contactInfo.phone}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Navigation */}
       <ScrollArea className="flex-1 px-4 py-4">
@@ -355,7 +338,7 @@ export function AppSidebar() {
 
 export function MobileTopBar() {
   const [open, setOpen] = useState(false)
-  const { tenant } = useAuth()
+  const { tenant, branding } = useAuth()
 
   return (
     <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-sidebar border-b border-sidebar-border flex items-center px-3 gap-3">
@@ -378,8 +361,17 @@ export function MobileTopBar() {
         </SheetContent>
       </Sheet>
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div className="w-7 h-7 rounded-md bg-sidebar-primary flex items-center justify-center shrink-0">
-          <GraduationCap className="w-4 h-4 text-sidebar-primary-foreground" />
+        <div className="w-7 h-7 rounded-md bg-sidebar-primary flex items-center justify-center shrink-0 overflow-hidden">
+          {branding?.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={tenant?.name || 'Logo'}
+              className="w-full h-full object-contain"
+              onError={e => { e.currentTarget.style.display = 'none' }}
+            />
+          ) : (
+            <GraduationCap className="w-4 h-4 text-sidebar-primary-foreground" />
+          )}
         </div>
         <span className="font-bold text-sidebar-foreground truncate text-sm">
           {tenant?.name ?? 'Mudirr'}
