@@ -38,8 +38,8 @@ const EMPTY_FORM = {
   employeeId: '',
   effectiveDate: '',
   basicSalary: '',
-  allowances: [{ key: 'houseRent', value: '' }, { key: 'transport', value: '' }] as KVRow[],
-  deductions: [{ key: 'providentFund', value: '' }, { key: 'incomeTax', value: '' }] as KVRow[],
+  allowances: [] as KVRow[],
+  deductions: [] as KVRow[],
 }
 
 function sumKV(rows: KVRow[]) {

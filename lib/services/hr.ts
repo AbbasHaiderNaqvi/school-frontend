@@ -263,25 +263,111 @@ export interface Paginated<T> {
   limit: number
 }
 
-// ── Leave Requests ─────────────────────────────────────────────────────────────
+// ── Leave Types ──────────────────────────────────────────────────────────────
 
-export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
-export type LeaveType = 'ANNUAL' | 'SICK' | 'CASUAL' | 'UNPAID' | 'MATERNITY' | 'PATERNITY' | 'OTHER'
+export interface LeaveType {
+  id: string
+  name: string
+  code: string
+  description?: string
+  totalDaysAllowed: number
+  isPaid: boolean
+  carryForward: boolean
+  maxCarryForwardDays: number
+  isActive?: boolean
+  createdAt?: string
+}
 
-export interface LeaveRequest {
+function normalizeLeaveType(raw: Record<string, unknown>): LeaveType {
+  return {
+    id: raw.id as string,
+    name: raw.name as string,
+    code: raw.code as string,
+    description: raw.description as string | undefined,
+    totalDaysAllowed: Number(raw.total_days_allowed ?? raw.totalDaysAllowed ?? 0),
+    isPaid: Boolean(raw.is_paid ?? raw.isPaid),
+    carryForward: Boolean(raw.carry_forward ?? raw.carryForward),
+    maxCarryForwardDays: Number(raw.max_carry_forward_days ?? raw.maxCarryForwardDays ?? 0),
+    isActive: (raw.is_active ?? raw.isActive) === undefined ? undefined : Boolean(raw.is_active ?? raw.isActive),
+    createdAt: (raw.created_at ?? raw.createdAt) as string | undefined,
+  }
+}
+
+// ── Leave Applications ───────────────────────────────────────────────────────
+
+export type LeaveApplicationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
+// The create-payload example repeated "APPROVED" for both the approve and
+// reject/cancel sections (looks like a copy-paste slip) — REJECTED/CANCELLED
+// are inferred from LeaveApplicationStatus, not separately confirmed.
+export type LeaveReviewDecision = 'APPROVED' | 'REJECTED' | 'CANCELLED'
+
+export interface LeaveApplication {
   id: string
   employeeId: string
   employeeName?: string
-  department?: string
-  leaveType: LeaveType
+  leaveTypeId: string
+  leaveTypeName?: string
   startDate: string
   endDate: string
-  days: number
+  days?: number
   reason?: string
-  status: LeaveStatus
-  reviewedBy?: string
-  reviewNote?: string
+  status: LeaveApplicationStatus
+  reviewedByUserId?: string
+  reviewedAt?: string
+  reviewComment?: string
   createdAt: string
+}
+
+function numOrUndef(...values: unknown[]): number | undefined {
+  for (const v of values) {
+    if (v !== undefined && v !== null) return Number(v)
+  }
+  return undefined
+}
+
+function normalizeLeaveApplication(raw: Record<string, unknown>): LeaveApplication {
+  return {
+    id: raw.id as string,
+    employeeId: (raw.employee_id ?? raw.employeeId) as string,
+    employeeName: (raw.employee_name ?? raw.employeeName) as string | undefined,
+    leaveTypeId: (raw.leave_type_id ?? raw.leaveTypeId) as string,
+    leaveTypeName: (raw.leave_type_name ?? raw.leaveTypeName) as string | undefined,
+    startDate: (raw.start_date ?? raw.startDate) as string,
+    endDate: (raw.end_date ?? raw.endDate) as string,
+    days: numOrUndef(raw.days),
+    reason: raw.reason as string | undefined,
+    status: raw.status as LeaveApplicationStatus,
+    reviewedByUserId: (raw.reviewed_by_user_id ?? raw.reviewedByUserId ?? raw.reviewed_by ?? raw.reviewedBy) as string | undefined,
+    reviewedAt: (raw.reviewed_at ?? raw.reviewedAt) as string | undefined,
+    reviewComment: (raw.review_comment ?? raw.reviewComment ?? raw.comment) as string | undefined,
+    createdAt: (raw.created_at ?? raw.createdAt) as string,
+  }
+}
+
+// ── Leave Balances ───────────────────────────────────────────────────────────
+
+export interface LeaveBalanceEntry {
+  leaveTypeId?: string
+  leaveTypeName?: string
+  leaveTypeCode?: string
+  year?: string
+  allocatedDays: number
+  usedDays: number
+  pendingDays?: number
+  remainingDays?: number
+}
+
+function normalizeLeaveBalanceEntry(raw: Record<string, unknown>): LeaveBalanceEntry {
+  return {
+    leaveTypeId: (raw.leave_type_id ?? raw.leaveTypeId) as string | undefined,
+    leaveTypeName: (raw.leave_type_name ?? raw.leaveTypeName ?? raw.leave_type ?? raw.leaveType) as string | undefined,
+    leaveTypeCode: (raw.leave_type_code ?? raw.leaveTypeCode ?? raw.leave_code ?? raw.leaveCode) as string | undefined,
+    year: raw.year !== undefined ? String(raw.year) : undefined,
+    allocatedDays: Number(raw.allocated_days ?? raw.allocatedDays ?? raw.total_days ?? raw.totalDays ?? 0),
+    usedDays: Number(raw.used_days ?? raw.usedDays ?? 0),
+    pendingDays: numOrUndef(raw.pending_days, raw.pendingDays),
+    remainingDays: numOrUndef(raw.remaining_days, raw.remainingDays, raw.balance_days, raw.balanceDays),
+  }
 }
 
 // ── Job Openings ──────────────────────────────────────────────────────────────
@@ -467,39 +553,98 @@ export const hrService = {
     return !error
   },
 
-  // ── Leave Requests ─────────────────────────────────────────────────────────
+  // ── Leave Types ──────────────────────────────────────────────────────────────
 
-  async getLeaveRequests(params: { page?: number; limit?: number; status?: LeaveStatus; employeeId?: string } = {}): Promise<Paginated<LeaveRequest>> {
+  async getLeaveTypes(): Promise<LeaveType[]> {
+    const { data, error } = await api.get<unknown>('/hr/leaves/types')
+    if (error) throw new Error(error)
+    return toArray<Record<string, unknown>>(data).map(normalizeLeaveType)
+  },
+
+  async getLeaveTypeById(id: string): Promise<LeaveType | null> {
+    const { data } = await api.get<Record<string, unknown>>(`/hr/leaves/types/${id}`)
+    return data ? normalizeLeaveType(data) : null
+  },
+
+  async createLeaveType(payload: {
+    name: string
+    code: string
+    description?: string
+    totalDaysAllowed: number
+    isPaid: boolean
+    carryForward: boolean
+    maxCarryForwardDays?: number
+  }): Promise<{ leaveType: LeaveType | null; error?: string }> {
+    const { data, error } = await api.post<Record<string, unknown>>('/hr/leaves/types', payload)
+    if (error || !data) return { leaveType: null, error: error || 'Failed to create leave type' }
+    return { leaveType: normalizeLeaveType(data) }
+  },
+
+  async updateLeaveType(id: string, payload: Partial<{
+    name: string
+    code: string
+    description: string
+    totalDaysAllowed: number
+    isPaid: boolean
+    carryForward: boolean
+    maxCarryForwardDays: number
+    isActive: boolean
+  }>): Promise<LeaveType | null> {
+    const { data } = await api.patch<Record<string, unknown>>(`/hr/leaves/types/${id}`, payload)
+    return data ? normalizeLeaveType(data) : null
+  },
+
+  async deleteLeaveType(id: string): Promise<boolean> {
+    const { error } = await api.delete(`/hr/leaves/types/${id}`)
+    return !error
+  },
+
+  // ── Leave Allocation ─────────────────────────────────────────────────────────
+  // No endpoint URL was given for this action — inferred from the sibling
+  // resource naming (/hr/leaves/types, /hr/leaves/balances, /hr/leaves/applications).
+  async allocateLeaveType(payload: { employeeId: string; leaveTypeId: string; year: string; days: number }): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.post('/hr/leaves/allocations', payload)
+    return { success: !error, error: error ?? undefined }
+  },
+
+  // ── Leave Balances ───────────────────────────────────────────────────────────
+  async getLeaveBalance(employeeId: string, year?: string): Promise<LeaveBalanceEntry[]> {
+    const qs = year ? `?year=${encodeURIComponent(year)}` : ''
+    const { data, error } = await api.get<unknown>(`/hr/leaves/balances/${employeeId}${qs}`)
+    if (error) throw new Error(error)
+    return toArray<Record<string, unknown>>(data).map(normalizeLeaveBalanceEntry)
+  },
+
+  // ── Leave Applications ───────────────────────────────────────────────────────
+  async getLeaveApplications(params: { page?: number; limit?: number; status?: LeaveApplicationStatus; employeeId?: string } = {}): Promise<Paginated<LeaveApplication>> {
     const q = new URLSearchParams()
     if (params.page) q.set('page', String(params.page))
     if (params.limit) q.set('limit', String(params.limit))
     if (params.status) q.set('status', params.status)
     if (params.employeeId) q.set('employeeId', params.employeeId)
     const qs = q.toString()
-    const { data, error } = await api.get<unknown>(`/hr/leaves${qs ? `?${qs}` : ''}`)
+    const { data, error } = await api.get<unknown>(`/hr/leaves/applications${qs ? `?${qs}` : ''}`)
     if (error) throw new Error(error)
-    const raw = data as unknown
-    if (Array.isArray(raw)) return { data: raw as LeaveRequest[], total: (raw as LeaveRequest[]).length, page: 1, limit: 200 }
-    const p = raw as Paginated<LeaveRequest>
-    return p || { data: [], total: 0, page: 1, limit: 20 }
+    const paginated = toPaginated<Record<string, unknown>>(data)
+    return { ...paginated, data: paginated.data.map(normalizeLeaveApplication) }
   },
 
-  async createLeaveRequest(payload: {
-    employeeId: string; leaveType: LeaveType; startDate: string; endDate: string; reason?: string
-  }): Promise<{ leave: LeaveRequest | null; error?: string }> {
-    const { data, error } = await api.post<LeaveRequest>('/hr/leaves', payload)
-    if (error || !data) return { leave: null, error: error || 'Failed to create leave request' }
-    return { leave: data }
+  async createLeaveApplication(payload: {
+    employeeId: string
+    leaveTypeId: string
+    startDate: string
+    endDate: string
+    reason?: string
+  }): Promise<{ application: LeaveApplication | null; error?: string }> {
+    const { data, error } = await api.post<Record<string, unknown>>('/hr/leaves/applications', payload)
+    if (error || !data) return { application: null, error: error || 'Failed to submit leave application' }
+    return { application: normalizeLeaveApplication(data) }
   },
 
-  async approveLeave(id: string, note?: string): Promise<boolean> {
-    const { error } = await api.post(`/hr/leaves/${id}/approve`, { note })
-    return !error
-  },
-
-  async rejectLeave(id: string, note?: string): Promise<boolean> {
-    const { error } = await api.post(`/hr/leaves/${id}/reject`, { note })
-    return !error
+  async reviewLeaveApplication(id: string, decision: LeaveReviewDecision, comment?: string): Promise<{ application: LeaveApplication | null; error?: string }> {
+    const { data, error } = await api.post<Record<string, unknown>>(`/hr/leaves/applications/${id}/review`, { decision, comment })
+    if (error || !data) return { application: null, error: error || 'Failed to review leave application' }
+    return { application: normalizeLeaveApplication(data) }
   },
 
   // ── Job Openings ───────────────────────────────────────────────────────────

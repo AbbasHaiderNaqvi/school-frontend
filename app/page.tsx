@@ -1,39 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
-import { getTenantSlug } from '@/lib/tenant'
-import { brandingService, type TenantBranding } from '@/lib/services/branding'
+import { usePublicBranding } from '@/contexts/public-branding-context'
+import { brandingService } from '@/lib/services/branding'
 import { tenantThemeStyle } from '@/lib/utils/theme'
 import { formatAddress, hasContactInfo } from '@/lib/utils/contact'
-import { useMapEmbedUrl } from '@/hooks/use-map-embed'
 import { GraduationCap, ArrowRight, ChevronRight, MapPin, Phone, Mail } from 'lucide-react'
 
 
 export default function Home() {
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
-  const [slug, setSlug] = useState<string | null>(null)
-  const [schoolBranding, setSchoolBranding] = useState<TenantBranding | null>(null)
-  const [brandingLoading, setBrandingLoading] = useState(false)
-  const mapEmbedUrl = useMapEmbedUrl(schoolBranding?.address)
-
-  // Detect subdomain once on the client
-  useEffect(() => {
-    setSlug(getTenantSlug())
-  }, [])
-
-  // Fetch school branding when on a subdomain
-  useEffect(() => {
-    if (!slug) return
-    setBrandingLoading(true)
-    brandingService.getPublicBranding(slug).then(data => {
-      setSchoolBranding(data)
-      setBrandingLoading(false)
-    })
-  }, [slug])
+  const { slug, branding: schoolBranding, isLoading: brandingLoading } = usePublicBranding()
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) router.push('/dashboard')
@@ -41,7 +22,7 @@ export default function Home() {
 
   const isSubdomain = slug !== null
 
-  if (isLoading || (isSubdomain && brandingLoading)) {
+  if (isLoading || brandingLoading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'oklch(0.17 0.02 250)' }}>
         <div style={{ width: 48, height: 48, borderRadius: 12, background: 'oklch(0.55 0.18 250)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite' }}>
@@ -75,6 +56,7 @@ export default function Home() {
           .sl-name-sm { font-size: 16px; font-weight: 700; color: var(--sidebar-foreground); letter-spacing: -0.3px; }
           .sl-login-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 20px; background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); font-size: 14px; font-weight: 700; border-radius: 8px; text-decoration: none; transition: opacity 0.15s; }
           .sl-login-btn:hover { opacity: 0.88; }
+          .sl-first-screen { min-height: 100vh; display: flex; flex-direction: column; }
           .sl-hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; text-align: center; }
           .sl-logo-wrap { margin-bottom: 32px; }
           .sl-logo-lg { height: 96px; max-width: 240px; object-fit: contain; }
@@ -122,11 +104,6 @@ export default function Home() {
           }
           .sl-map-addr { font-size: 14.5px; font-weight: 600; color: var(--foreground); max-width: 320px; line-height: 1.5; margin-bottom: 20px; position: relative; z-index: 1; }
           .sl-map-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); font-size: 13.5px; font-weight: 700; border-radius: 10px; position: relative; z-index: 1; }
-          .sl-map-frame { position: relative; border-radius: 22px; overflow: hidden; border: 1px solid var(--border); height: 360px; box-shadow: 0 24px 64px -24px oklch(from var(--sidebar-primary) l c h / 0.35); }
-          .sl-map-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
-          .sl-map-frame-link { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); font-size: 13px; font-weight: 700; border-radius: 10px; text-decoration: none; box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.3); transition: opacity 0.15s; }
-          .sl-map-frame-link:hover { opacity: 0.88; }
-          @media (max-width: 860px) { .sl-map-frame { height: 260px; } }
           @media (max-width: 860px) { .sl-contact-wrap { grid-template-columns: 1fr; gap: 32px; } .sl-map { height: 260px; } }
           .sl-footer { border-top: 1px solid var(--sidebar-border); padding: 16px 40px; display: flex; align-items: center; justify-content: center; gap: 8px; }
           .sl-footer-txt { font-size: 13px; color: oklch(from var(--sidebar-foreground) l c h / 0.45); }
@@ -136,43 +113,44 @@ export default function Home() {
         `}</style>
 
         <div className="sl" style={tenantThemeStyle(schoolBranding?.theme)}>
-          {/* Nav */}
-          <nav className="sl-nav">
-            <div className="sl-brand">
-              {schoolBranding?.logoUrl ? (
-                <img src={logoUrl} alt={schoolName} className="sl-logo-sm" onError={e => { e.currentTarget.style.display = 'none' }} />
-              ) : (
-                <div className="sl-logo-fallback">
-                  <GraduationCap style={{ width: 18, height: 18, color: 'var(--sidebar-primary-foreground)' }} />
-                </div>
-              )}
-              <span className="sl-name-sm">{schoolName}</span>
-            </div>
-            <Link href="/login" className="sl-login-btn">
-              Login <ChevronRight style={{ width: 14, height: 14 }} />
-            </Link>
-          </nav>
+          {/* First screen: nav + hero fill exactly one viewport height */}
+          <div className="sl-first-screen">
+            <nav className="sl-nav">
+              <div className="sl-brand">
+                {schoolBranding?.logoUrl ? (
+                  <img src={logoUrl} alt={schoolName} className="sl-logo-sm" onError={e => { e.currentTarget.style.display = 'none' }} />
+                ) : (
+                  <div className="sl-logo-fallback">
+                    <GraduationCap style={{ width: 18, height: 18, color: 'var(--sidebar-primary-foreground)' }} />
+                  </div>
+                )}
+                <span className="sl-name-sm">{schoolName}</span>
+              </div>
+              <Link href="/login" className="sl-login-btn">
+                Login <ChevronRight style={{ width: 14, height: 14 }} />
+              </Link>
+            </nav>
 
-          {/* Hero */}
-          <section className="sl-hero">
-            <div className="sl-logo-wrap">
-              {schoolBranding?.logoUrl ? (
-                <img src={logoUrl} alt={schoolName} className="sl-logo-lg" onError={e => { e.currentTarget.style.display = 'none' }} />
-              ) : (
-                <div className="sl-logo-fallback-lg">
-                  <GraduationCap style={{ width: 48, height: 48, color: 'var(--sidebar-primary-foreground)' }} />
-                </div>
-              )}
-            </div>
+            <section className="sl-hero">
+              <div className="sl-logo-wrap">
+                {schoolBranding?.logoUrl ? (
+                  <img src={logoUrl} alt={schoolName} className="sl-logo-lg" onError={e => { e.currentTarget.style.display = 'none' }} />
+                ) : (
+                  <div className="sl-logo-fallback-lg">
+                    <GraduationCap style={{ width: 48, height: 48, color: 'var(--sidebar-primary-foreground)' }} />
+                  </div>
+                )}
+              </div>
 
-            <h1 className="sl-h1">{schoolName}</h1>
-            <p className="sl-sub">{description}</p>
+              <h1 className="sl-h1">{schoolName}</h1>
+              <p className="sl-sub">{description}</p>
 
-            <Link href="/login" className="sl-cta">
-              Login to Dashboard
-              <ArrowRight style={{ width: 17, height: 17 }} />
-            </Link>
-          </section>
+              <Link href="/login" className="sl-cta">
+                Login to Dashboard
+                <ArrowRight style={{ width: 17, height: 17 }} />
+              </Link>
+            </section>
+          </div>
 
           {/* Contact */}
           {showContact && (
@@ -180,7 +158,7 @@ export default function Home() {
               <div className="sl-contact-in">
                 <div className="sl-contact-eye">Get in touch</div>
                 <h2 className="sl-contact-title">Visit or reach us</h2>
-                <div className={`sl-contact-wrap${(mapEmbedUrl || address?.googleMapsUrl) ? '' : ' no-map'}`}>
+                <div className={`sl-contact-wrap${address?.googleMapsUrl ? '' : ' no-map'}`}>
                   <div className="sl-contact-list">
                     {formattedAddress && (
                       <div className="sl-contact-row">
@@ -237,17 +215,7 @@ export default function Home() {
                     )}
                   </div>
 
-                  {mapEmbedUrl ? (
-                    <div className="sl-map-frame">
-                      <iframe src={mapEmbedUrl} loading="lazy" title={`Map showing ${schoolName}`} />
-                      {address?.googleMapsUrl && (
-                        <a href={address.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="sl-map-frame-link">
-                          Open in Google Maps
-                          <ArrowRight style={{ width: 14, height: 14 }} />
-                        </a>
-                      )}
-                    </div>
-                  ) : address?.googleMapsUrl ? (
+                  {address?.googleMapsUrl && (
                     <a href={address.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="sl-map">
                       <div className="sl-map-grid" />
                       <div className="sl-map-pin">
@@ -259,7 +227,7 @@ export default function Home() {
                         <ArrowRight style={{ width: 15, height: 15 }} />
                       </span>
                     </a>
-                  ) : null}
+                  )}
                 </div>
               </div>
             </section>

@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
+import { PublicBrandingProvider } from '@/contexts/public-branding-context'
 import { extractTenantSlugFromHost } from '@/lib/tenant'
 import { API_BASE_URL } from '@/lib/api-base-url'
 import './globals.css'
@@ -51,9 +52,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} antialiased`} suppressHydrationWarning>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <PublicBrandingProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </PublicBrandingProvider>
         <Analytics />
       </body>
     </html>

@@ -3,11 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
-import { getTenantSlug } from '@/lib/tenant'
-import { brandingService, type TenantBranding } from '@/lib/services/branding'
+import { usePublicBranding } from '@/contexts/public-branding-context'
+import { brandingService } from '@/lib/services/branding'
 import { tenantThemeStyle } from '@/lib/utils/theme'
 import { formatAddress, hasContactInfo } from '@/lib/utils/contact'
-import { useMapEmbedUrl } from '@/hooks/use-map-embed'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,30 +29,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [tenantSlug, setTenantSlug] = useState<string | null>(null)
-  const [branding, setBranding] = useState<TenantBranding | null>(null)
-  const [brandingLoading, setBrandingLoading] = useState(true)
+  const { slug: tenantSlug, branding, isLoading: brandingLoading } = usePublicBranding()
 
   useEffect(() => {
-    const slug = getTenantSlug()
-    if (!slug) {
-      // No subdomain — this page is not accessible from the main domain
+    // No subdomain — this page is not accessible from the main domain
+    if (!brandingLoading && !tenantSlug) {
       router.replace('/')
-      return
     }
-    setTenantSlug(slug)
-    brandingService.getPublicBranding(slug).then(data => {
-      setBranding(data)
-      setBrandingLoading(false)
-    })
-  }, [router])
+  }, [brandingLoading, tenantSlug, router])
 
   const schoolName = branding?.name || tenantSlug?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Mudir'
   const logoUrl = tenantSlug ? brandingService.logoUrl(tenantSlug, branding?.brandingUpdatedAt) : null
   const hasLogo = Boolean(branding?.logoUrl)
   const formattedAddress = formatAddress(branding?.address)
   const showContact = hasContactInfo(branding?.contact, branding?.address)
-  const mapEmbedUrl = useMapEmbedUrl(branding?.address)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,7 +60,7 @@ export default function LoginPage() {
     setIsLoading(false)
   }
 
-  if (brandingLoading) {
+  if (brandingLoading || !tenantSlug) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'oklch(0.17 0.02 250)' }}>
         <div style={{ width: 48, height: 48, borderRadius: 12, background: 'oklch(0.55 0.18 250)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite' }}>
@@ -129,7 +118,7 @@ export default function LoginPage() {
                 <div className="flex items-center gap-1.5 text-center">
                   <MapPin className="w-3.5 h-3.5 shrink-0" />
                   <span>{formattedAddress}</span>
-                  {!mapEmbedUrl && branding?.address?.googleMapsUrl && (
+                  {branding?.address?.googleMapsUrl && (
                     <a
                       href={branding.address.googleMapsUrl}
                       target="_blank"
@@ -145,16 +134,6 @@ export default function LoginPage() {
                 <div className="flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 shrink-0" />
                   <span>{branding.contact.phone}</span>
-                </div>
-              )}
-              {mapEmbedUrl && (
-                <div className="w-full mt-2 rounded-xl overflow-hidden border border-sidebar-border/60 h-28">
-                  <iframe
-                    src={mapEmbedUrl}
-                    loading="lazy"
-                    title={`Map showing ${schoolName}`}
-                    className="w-full h-full border-0 block"
-                  />
                 </div>
               )}
             </div>

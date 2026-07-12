@@ -34,6 +34,8 @@ import {
   DollarSign,
   Menu,
   BarChart3,
+  BadgePercent,
+  CalendarClock,
 } from 'lucide-react'
 import {
   Collapsible,
@@ -83,6 +85,7 @@ const navItems: NavItem[] = [
     children: [
       { title: 'Overview', href: '/dashboard/finance', icon: LayoutDashboard },
       { title: 'GL Accounts', href: '/dashboard/finance/gl', icon: FileText, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner'] },
+      { title: 'Fiscal Periods', href: '/dashboard/finance/periods', icon: CalendarClock, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner'] },
       { title: 'Reports', href: '/dashboard/finance/reports', icon: BarChart3, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner', 'tenant_principal'] },
       { title: 'All Transactions', href: '/dashboard/finance/all-transactions', icon: Receipt },
       { title: 'Transaction Flow', href: '/dashboard/finance/transactions-flow', icon: Wallet, roles: ['tenant_accountant', 'tenant_admin', 'tenant_principal'] },
@@ -103,8 +106,10 @@ const navItems: NavItem[] = [
       { title: 'Fee Structures', href: '/dashboard/fees/structures', icon: FileText, roles: ['tenant_admin', 'tenant_accountant', 'tenant_owner'] },
       { title: 'Invoices', href: '/dashboard/fees/invoices', icon: Receipt },
       { title: 'Payments', href: '/dashboard/fees/payments', icon: Wallet },
+      { title: 'Discounts & Scholarships', href: '/dashboard/fees/discounts', icon: BadgePercent, roles: ['tenant_admin', 'tenant_accountant', 'tenant_owner', 'tenant_principal'] },
       { title: 'Fee Collection', href: '/dashboard/cashier/fee-collection', icon: Wallet, roles: ['tenant_cashier', 'tenant_accountant', 'tenant_admin'] },
       { title: 'Receipts', href: '/dashboard/receipts', icon: FileText },
+      { title: 'Reports', href: '/dashboard/fees/reports', icon: BarChart3, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner', 'tenant_principal'] },
     ],
   },
   {

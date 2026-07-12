@@ -108,6 +108,14 @@ export interface ExpenseApprovalSettings {
   threshold: string
 }
 
+// No sample response was given for /finance/periods, so this stays loose
+// (just `id` guaranteed) rather than guessing field names — the UI renders
+// whatever keys actually come back instead of assuming a fixed shape.
+export interface FiscalPeriod {
+  id: string
+  [key: string]: unknown
+}
+
 export interface Paginated<T> {
   data: T[]
   total: number
@@ -277,5 +285,25 @@ export const financeService = {
     const { data, error } = await api.post<Budget>('/finance/budgets', payload)
     if (error || !data) return { budget: null, error: error || 'Failed to create budget' }
     return { budget: data }
+  },
+
+  // Fiscal Periods
+  async getPeriods(): Promise<FiscalPeriod[]> {
+    const { data, error } = await api.get<unknown>('/finance/periods')
+    if (error) throw new Error(error)
+    return toArray<FiscalPeriod>(data)
+  },
+
+  // No sample payload was given — best guess is a periodId reference (periods
+  // are listed with an id), sent only if provided in case the backend instead
+  // just closes/reopens "the current period" with no body at all.
+  async closePeriod(periodId?: string): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.post('/finance/periods/close', periodId ? { periodId } : {})
+    return { success: !error, error: error ?? undefined }
+  },
+
+  async reopenPeriod(periodId?: string): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.post('/finance/periods/reopen', periodId ? { periodId } : {})
+    return { success: !error, error: error ?? undefined }
   },
 }

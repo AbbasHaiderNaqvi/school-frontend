@@ -121,6 +121,44 @@ export async function apiRequest<T = unknown>(
   }
 }
 
+// For endpoints that return a real file (e.g. a report with ?format=pdf/csv/xlsx)
+// instead of JSON. apiRequest always calls response.json(), which would corrupt
+// binary content, so this fetches the blob directly and triggers a download —
+// same Blob→createObjectURL→click pattern already used for receipt printing.
+export async function apiDownload(endpoint: string, fallbackFilename: string): Promise<{ success: boolean; error?: string }> {
+  let accessToken = tokenStore.getAccessToken()
+  if (accessToken && tokenStore.isTokenExpired()) {
+    accessToken = await refreshAccessToken()
+  }
+
+  const headers: Record<string, string> = {}
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+
+  try {
+    const response = await fetch(`${BASE_URL}${endpoint}`, { headers })
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => null)
+      return { success: false, error: errData?.message || errData?.error || `HTTP ${response.status}` }
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('Content-Disposition')
+    const filename = disposition?.match(/filename="?([^"]+)"?/)?.[1] || fallbackFilename
+
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Download failed' }
+  }
+}
+
 // Normalizes any paginated-shaped response from the API, handling three cases:
 //   1. null/undefined       → empty page
 //   2. bare array  []       → wraps into { data, total, page, limit }

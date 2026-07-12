@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ReportView } from '@/components/finance/report-view'
+import { ReportView } from '@/components/reports/report-view'
 import { Loader2, RefreshCw, Scale, BookText, FileStack, TrendingUp, Landmark } from 'lucide-react'
 
 function todayStr() {
