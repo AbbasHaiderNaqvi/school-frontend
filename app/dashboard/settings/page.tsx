@@ -25,7 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { getInitials } from '@/lib/utils'
+import { emailError, phoneError, hasNoErrors } from '@/lib/validation'
 import {
   User,
   Building2,
@@ -110,6 +112,7 @@ export default function SettingsPage() {
   const [isSavingOrg, setIsSavingOrg] = useState(false)
   const [orgSaved, setOrgSaved] = useState(false)
   const [orgError, setOrgError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const logoInputRef = useRef<HTMLInputElement>(null)
   const faviconInputRef = useRef<HTMLInputElement>(null)
 
@@ -232,7 +235,22 @@ export default function SettingsPage() {
     if (faviconInputRef.current) faviconInputRef.current.value = ''
   }
 
+  const validateOrgForm = (): boolean => {
+    const errors: Record<string, string> = {}
+    const emailErr = emailError(orgForm.email, false)
+    if (emailErr) errors.email = emailErr
+    const phoneErr = phoneError(orgForm.phone, false)
+    if (phoneErr) errors.phone = phoneErr
+    const whatsappErr = phoneError(orgForm.whatsapp, false)
+    if (whatsappErr) errors.whatsapp = whatsappErr
+    const faxErr = phoneError(orgForm.fax, false)
+    if (faxErr) errors.fax = faxErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleSaveOrganization = async () => {
+    if (!validateOrgForm()) return
     setIsSavingOrg(true)
     setOrgSaved(false)
     setOrgError(null)
@@ -711,7 +729,9 @@ export default function SettingsPage() {
                       value={orgForm.email}
                       onChange={e => setOrgForm(prev => ({ ...prev, email: e.target.value }))}
                       placeholder="info@school.edu"
+                      className={fieldErrors.email ? 'border-destructive' : ''}
                     />
+                    {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="contact-phone">
@@ -723,7 +743,9 @@ export default function SettingsPage() {
                       value={orgForm.phone}
                       onChange={e => setOrgForm(prev => ({ ...prev, phone: e.target.value }))}
                       placeholder="+1 (555) 123-4567"
+                      className={fieldErrors.phone ? 'border-destructive' : ''}
                     />
+                    {fieldErrors.phone && <p className="text-xs text-destructive">{fieldErrors.phone}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="whatsapp">
@@ -735,7 +757,9 @@ export default function SettingsPage() {
                       value={orgForm.whatsapp}
                       onChange={e => setOrgForm(prev => ({ ...prev, whatsapp: e.target.value }))}
                       placeholder="+1 (555) 123-4567"
+                      className={fieldErrors.whatsapp ? 'border-destructive' : ''}
                     />
+                    {fieldErrors.whatsapp && <p className="text-xs text-destructive">{fieldErrors.whatsapp}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="telegram">
@@ -772,7 +796,9 @@ export default function SettingsPage() {
                       value={orgForm.fax}
                       onChange={e => setOrgForm(prev => ({ ...prev, fax: e.target.value }))}
                       placeholder="+1 (555) 123-4567"
+                      className={fieldErrors.fax ? 'border-destructive' : ''}
                     />
+                    {fieldErrors.fax && <p className="text-xs text-destructive">{fieldErrors.fax}</p>}
                   </div>
                 </div>
               </CardContent>
@@ -939,28 +965,25 @@ export default function SettingsPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="currency">Currency</Label>
-                    <Select
+                    <Combobox
                       value={settings.currency}
                       onValueChange={value => {
                         const currency = currencyService.getCurrency(value)
-                        setSettings(prev => ({ 
-                          ...prev, 
+                        setSettings(prev => ({
+                          ...prev,
                           currency: value,
                           currencySymbol: currency?.symbol || value
                         }))
                       }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        {CURRENCIES.map(curr => (
-                          <SelectItem key={curr.code} value={curr.code}>
-                            {curr.code} - {curr.name} ({curr.symbol})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      options={CURRENCIES.map(curr => ({
+                        value: curr.code,
+                        label: `${curr.code} - ${curr.name} (${curr.symbol})`,
+                        keywords: curr.region,
+                      }))}
+                      placeholder="Select currency"
+                      searchPlaceholder="Search currencies…"
+                      emptyText="No currencies found."
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="currencySymbol">Currency Symbol</Label>

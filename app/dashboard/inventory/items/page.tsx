@@ -1,446 +1,421 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { Textarea } from '@/components/ui/textarea'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, TrendingDown } from 'lucide-react'
-import type { InventoryItem, InventoryMovement } from '@/lib/types'
-import { generateId } from '@/lib/utils'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Combobox } from '@/components/ui/combobox'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import { inventoryService, type InventoryItemRecord, type DropdownItem, type UnitDropdownItem } from '@/lib/services/inventory'
+import { numberError, hasNoErrors } from '@/lib/validation'
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Package } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
-export default function InventoryPage() {
-  const { user } = useAuth()
-  const [items, setItems] = useState<InventoryItem[]>([
-    {
-      id: '1',
-      tenantId: user?.tenantId || '',
-      name: 'Textbook - English Class 9',
-      category: 'Books',
-      sku: 'TXT-ENG-09',
-      quantity: 45,
-      reorderLevel: 20,
-      reorderQuantity: 50,
-      unitPrice: 250,
-      location: 'Library Shelf A1',
-      supplier: 'National Books',
-      status: 'in_stock',
-      lastRestocked: '2025-01-15',
-      movementHistory: [
-        {
-          id: '1',
-          movementType: 'purchase',
-          quantity: 50,
-          toLocation: 'Library Shelf A1',
-          reason: 'Initial stock',
-          reference: 'PO-2025-001',
-          movedBy: 'admin',
-          movedByName: 'Admin',
-          date: '2025-01-15',
-        },
-      ],
-      createdAt: '2025-01-10',
-      updatedAt: '2025-01-15',
-    },
-    {
-      id: '2',
-      tenantId: user?.tenantId || '',
-      name: 'Lab Equipment - Microscope',
-      category: 'Equipment',
-      sku: 'LAB-MIC-001',
-      quantity: 8,
-      reorderLevel: 5,
-      reorderQuantity: 5,
-      unitPrice: 15000,
-      location: 'Science Lab',
-      supplier: 'Science Suppliers Ltd',
-      status: 'in_stock',
-      lastRestocked: '2025-01-10',
-      movementHistory: [],
-      createdAt: '2025-01-05',
-      updatedAt: '2025-01-10',
-    },
-    {
-      id: '3',
-      tenantId: user?.tenantId || '',
-      name: 'Office Paper - A4 (500 sheets)',
-      category: 'Supplies',
-      sku: 'OFC-PAP-A4',
-      quantity: 12,
-      reorderLevel: 25,
-      reorderQuantity: 50,
-      unitPrice: 350,
-      location: 'Office Store',
-      supplier: 'Office Supplies Co',
-      status: 'low_stock',
-      lastRestocked: '2024-12-20',
-      movementHistory: [],
-      createdAt: '2024-12-01',
-      updatedAt: '2025-01-01',
-    },
-  ])
+const ALL = '__all__'
+const EMPTY_FORM = {
+  name: '', categoryId: '', unitId: '', trackExpiry: false,
+  minStockLevel: '', reorderLevel: '', barcode: '', assetTag: '', description: '',
+}
 
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [isAddingItem, setIsAddingItem] = useState(false)
-  const [newItem, setNewItem] = useState<Partial<InventoryItem>>({})
-  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
+export default function InventoryItemsPage() {
+  const { can } = useAuth()
 
-  const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          item.sku.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus = filterStatus === 'all' || item.status === filterStatus
-      return matchesSearch && matchesStatus
-    })
-  }, [items, searchTerm, filterStatus])
+  const [items, setItems] = useState<InventoryItemRecord[]>([])
+  const [categories, setCategories] = useState<DropdownItem[]>([])
+  const [units, setUnits] = useState<UnitDropdownItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
 
-  const stats = {
-    totalItems: items.length,
-    lowStockItems: items.filter(i => i.status === 'low_stock').length,
-    outOfStock: items.filter(i => i.status === 'out_of_stock').length,
-    totalValue: items.reduce((sum, i) => sum + (i.quantity * i.unitPrice), 0),
-  }
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<InventoryItemRecord | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [form, setForm] = useState(EMPTY_FORM)
 
-  const handleAddItem = () => {
-    if (newItem.name && newItem.sku && newItem.quantity !== undefined) {
-      const item: InventoryItem = {
-        id: generateId(),
-        tenantId: user?.tenantId || '',
-        name: newItem.name,
-        sku: newItem.sku,
-        category: newItem.category || 'General',
-        quantity: newItem.quantity,
-        reorderLevel: newItem.reorderLevel || 10,
-        reorderQuantity: newItem.reorderQuantity || 20,
-        unitPrice: newItem.unitPrice || 0,
-        location: newItem.location || 'Storage',
-        supplier: newItem.supplier || '',
-        status: newItem.quantity! <= (newItem.reorderLevel || 10) ? 'low_stock' : 'in_stock',
-        lastRestocked: new Date().toISOString().split('T')[0],
-        movementHistory: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-      setItems([...items, item])
-      setNewItem({})
-      setIsAddingItem(false)
+  const [deleteTarget, setDeleteTarget] = useState<InventoryItemRecord | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  const loadDropdowns = useCallback(async () => {
+    const [cats, us] = await Promise.all([
+      inventoryService.getCategoriesDropdown(),
+      inventoryService.getUnitsDropdown(),
+    ])
+    setCategories(cats)
+    setUnits(us)
+  }, [])
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError('')
+    try {
+      const result = await inventoryService.getItems({
+        limit: 200,
+        search: search || undefined,
+        categoryId: categoryFilter || undefined,
+      })
+      setItems(result.data)
+      setTotal(result.total)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load items.')
+    } finally {
+      setIsLoading(false)
     }
+  }, [search, categoryFilter])
+
+  useEffect(() => { loadDropdowns() }, [loadDropdowns])
+  useEffect(() => { loadData() }, [loadData])
+
+  if (!can('inventory.item.read')) return <AccessDenied />
+
+  const openCreate = () => {
+    setEditing(null)
+    setForm(EMPTY_FORM)
+    setSubmitError('')
+    setFieldErrors({})
+    setDialogOpen(true)
   }
 
-  const handleDeleteItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id))
+  const openEdit = (item: InventoryItemRecord) => {
+    setEditing(item)
+    setForm({
+      name: item.name,
+      categoryId: item.categoryId ?? item.category?.id ?? '',
+      unitId: item.unitId ?? item.unit?.id ?? '',
+      trackExpiry: item.trackExpiry,
+      minStockLevel: item.minStockLevel != null ? String(item.minStockLevel) : '',
+      reorderLevel: item.reorderLevel != null ? String(item.reorderLevel) : '',
+      barcode: item.barcode ?? '',
+      assetTag: item.assetTag ?? '',
+      description: item.description ?? '',
+    })
+    setSubmitError('')
+    setFieldErrors({})
+    setDialogOpen(true)
   }
 
-  const handleRecordMovement = (itemId: string, quantity: number, movementType: string, reason: string) => {
-    setItems(items.map(item => {
-      if (item.id === itemId) {
-        const newQuantity = movementType === 'usage' || movementType === 'adjustment'
-          ? item.quantity - quantity
-          : item.quantity + quantity
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const minStockErr = numberError(form.minStockLevel, { min: 0, label: 'Minimum stock level' })
+    if (minStockErr) errors.minStockLevel = minStockErr
+    const reorderErr = numberError(form.reorderLevel, { min: 0, label: 'Reorder level' })
+    if (reorderErr) errors.reorderLevel = reorderErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
 
-        const movement: InventoryMovement = {
-          id: generateId(),
-          movementType: movementType as any,
-          quantity,
-          reason,
-          movedBy: user?.id || '',
-          movedByName: user?.name || '',
-          date: new Date().toISOString(),
-        }
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.categoryId || !form.unitId || !validate()) return
+    setIsSubmitting(true)
+    setSubmitError('')
 
-        return {
-          ...item,
-          quantity: newQuantity,
-          status: newQuantity === 0 ? 'out_of_stock' : newQuantity <= item.reorderLevel ? 'low_stock' : 'in_stock',
-          lastMovement: new Date().toISOString(),
-          movementHistory: [...(item.movementHistory || []), movement],
-          updatedAt: new Date().toISOString(),
-        }
-      }
-      return item
-    }))
+    const payload = {
+      name: form.name.trim(),
+      categoryId: form.categoryId,
+      unitId: form.unitId,
+      trackExpiry: form.trackExpiry,
+      minStockLevel: form.minStockLevel ? Number(form.minStockLevel) : undefined,
+      reorderLevel: form.reorderLevel ? Number(form.reorderLevel) : undefined,
+      barcode: form.barcode.trim() || undefined,
+      assetTag: form.assetTag.trim() || undefined,
+      description: form.description.trim() || undefined,
+    }
+
+    const result = editing
+      ? await inventoryService.updateItem(editing.id, payload)
+      : await inventoryService.createItem(payload)
+
+    if (result.error || !result.data) {
+      setSubmitError(result.error || 'Operation failed')
+      setIsSubmitting(false)
+      return
+    }
+
+    setDialogOpen(false)
+    setIsSubmitting(false)
+    loadData()
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    setDeleteError('')
+    const { error } = await inventoryService.deleteItem(deleteTarget.id)
+    setIsDeleting(false)
+    if (error) { setDeleteError(error); return }
+    setDeleteTarget(null)
+    loadData()
   }
 
   return (
-    <div className="flex-1 space-y-8 p-8">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Inventory Management</h1>
-        <p className="text-muted-foreground">Track and manage school inventory items</p>
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalItems}</div>
-            <p className="text-xs text-muted-foreground mt-1">In inventory</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{stats.lowStockItems}</div>
-            <p className="text-xs text-muted-foreground mt-1">Need reordering</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.outOfStock}</div>
-            <p className="text-xs text-muted-foreground mt-1">Urgent orders</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">৳{stats.totalValue.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">Inventory value</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Low Stock Alert */}
-      {stats.lowStockItems > 0 && (
-        <Alert className="bg-yellow-50 border-yellow-200">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-          <AlertDescription className="text-yellow-800">
-            {stats.lowStockItems} item{stats.lowStockItems !== 1 ? 's' : ''} running low on stock. Consider placing reorder.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Filters and Search */}
-      <div className="flex gap-4 items-end">
-        <div className="flex-1">
-          <Input
-            placeholder="Search by name or SKU..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 border rounded-md text-sm"
-        >
-          <option value="all">All Status</option>
-          <option value="in_stock">In Stock</option>
-          <option value="low_stock">Low Stock</option>
-          <option value="out_of_stock">Out of Stock</option>
-        </select>
-        <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Add Item</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Inventory Item</DialogTitle>
-              <DialogDescription>Add a new item to your inventory</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Item Name *</label>
-                <Input
-                  value={newItem.name || ''}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  placeholder="e.g., Textbook - English"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">SKU *</label>
-                <Input
-                  value={newItem.sku || ''}
-                  onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })}
-                  placeholder="e.g., TXT-ENG-09"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Category</label>
-                <Input
-                  value={newItem.category || ''}
-                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                  placeholder="e.g., Books"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-sm font-medium">Quantity *</label>
-                  <Input
-                    type="number"
-                    value={newItem.quantity || ''}
-                    onChange={(e) => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Unit Price</label>
-                  <Input
-                    type="number"
-                    value={newItem.unitPrice || ''}
-                    onChange={(e) => setNewItem({ ...newItem, unitPrice: Number(e.target.value) })}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Location</label>
-                <Input
-                  value={newItem.location || ''}
-                  onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
-                  placeholder="e.g., Shelf A1"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Reorder Level</label>
-                <Input
-                  type="number"
-                  value={newItem.reorderLevel || ''}
-                  onChange={(e) => setNewItem({ ...newItem, reorderLevel: Number(e.target.value) })}
-                  placeholder="10"
-                />
-              </div>
-              <Button onClick={handleAddItem} className="w-full">Add Item</Button>
+    <div className="space-y-6">
+      <PageHeader
+        title="Inventory Items"
+        description="The item catalogue — pencils, lab kits, projectors, sports gear…"
+        action={
+          can('inventory.item.create') && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button onClick={openCreate}>
+                <Plus className="mr-2 h-4 w-4" /> Add Item
+              </Button>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+          )
+        }
+      />
 
-      {/* Items Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Inventory Items</CardTitle>
-          <CardDescription>{filteredItems.length} items found</CardDescription>
+          <CardTitle>All Items ({total})</CardTitle>
+          <div className="flex flex-col sm:flex-row gap-3 mt-3">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, code, or barcode…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Combobox
+              value={categoryFilter || ALL}
+              onValueChange={v => setCategoryFilter(v === ALL ? '' : v)}
+              options={[
+                { value: ALL, label: 'All Categories' },
+                ...categories.map(c => ({ value: c.id, label: c.name })),
+              ]}
+              placeholder="All Categories"
+              searchPlaceholder="Search categories…"
+              emptyText="No categories found."
+              className="w-full sm:w-56"
+            />
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item Name</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Unit Price</TableHead>
-                  <TableHead>Total Value</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredItems.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell>{item.sku}</TableCell>
-                    <TableCell>{item.category}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                        {item.quantity}
-                      </div>
-                    </TableCell>
-                    <TableCell>৳{item.unitPrice.toLocaleString()}</TableCell>
-                    <TableCell>৳{(item.quantity * item.unitPrice).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          item.status === 'in_stock'
-                            ? 'default'
-                            : item.status === 'low_stock'
-                            ? 'secondary'
-                            : 'destructive'
-                        }
-                      >
-                        {item.status === 'in_stock' ? 'In Stock' : item.status === 'low_stock' ? 'Low Stock' : 'Out of Stock'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">{item.location}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setSelectedItem(item)}
-                            >
-                              <TrendingDown className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Record Movement - {item.name}</DialogTitle>
-                              <DialogDescription>Record a stock movement for this item</DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="text-sm font-medium">Movement Type</label>
-                                <select className="w-full px-3 py-2 border rounded-md text-sm">
-                                  <option>Purchase (Add stock)</option>
-                                  <option>Usage (Remove stock)</option>
-                                  <option>Adjustment</option>
-                                  <option>Transfer</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Quantity</label>
-                                <Input type="number" placeholder="0" />
-                              </div>
-                              <div>
-                                <label className="text-sm font-medium">Reason</label>
-                                <Input placeholder="e.g., Monthly usage, Stock adjustment" />
-                              </div>
-                              <Button className="w-full">Record Movement</Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteItem(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          {loadError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{loadError}</AlertDescription>
+            </Alert>
+          )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Unit</TableHead>
+                <TableHead>Expiry Tracked</TableHead>
+                <TableHead>Reorder Level</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={7} />
+              ) : (
+                <>
+                  {items.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                        <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        No items found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {items.map(item => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{item.code}</span>
+                      </TableCell>
+                      <TableCell className="font-semibold">{item.name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{item.category?.name ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{item.unit?.symbol ?? item.unit?.name ?? '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant={item.trackExpiry ? 'default' : 'secondary'}>{item.trackExpiry ? 'Yes' : 'No'}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{item.reorderLevel ?? '—'}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {can('inventory.item.update') && (
+                              <DropdownMenuItem onClick={() => openEdit(item)}>
+                                <Edit className="mr-2 h-4 w-4" /> Edit
+                              </DropdownMenuItem>
+                            )}
+                            {can('inventory.item.delete') && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => { setDeleteTarget(item); setDeleteError('') }} className="text-destructive">
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
+
+      {/* Create / Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Item' : 'Add Item'}</DialogTitle>
+            <DialogDescription>
+              {editing ? `Update details for ${editing.name}` : 'Add a new item to the catalogue. A code is generated automatically.'}
+            </DialogDescription>
+          </DialogHeader>
+          {submitError && (
+            <Alert variant="destructive"><AlertDescription>{submitError}</AlertDescription></Alert>
+          )}
+          <div className="space-y-4">
+            <div>
+              <Label>Item Name <span className="text-destructive">*</span></Label>
+              <Input
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. A4 Paper Ream"
+                className="mt-1"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Category <span className="text-destructive">*</span></Label>
+                <Combobox
+                  value={form.categoryId}
+                  onValueChange={v => setForm(f => ({ ...f, categoryId: v }))}
+                  options={categories.map(c => ({ value: c.id, label: c.name }))}
+                  placeholder="Select category"
+                  searchPlaceholder="Search categories…"
+                  emptyText="No categories found."
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Unit <span className="text-destructive">*</span></Label>
+                <Combobox
+                  value={form.unitId}
+                  onValueChange={v => setForm(f => ({ ...f, unitId: v }))}
+                  options={units.map(u => ({ value: u.id, label: `${u.name} (${u.symbol})` }))}
+                  placeholder="Select unit"
+                  searchPlaceholder="Search units…"
+                  emptyText="No units found."
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Minimum Stock Level</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.minStockLevel}
+                  onChange={e => setForm(f => ({ ...f, minStockLevel: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.minStockLevel ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.minStockLevel && <p className="text-xs text-destructive mt-1">{fieldErrors.minStockLevel}</p>}
+              </div>
+              <div>
+                <Label>Reorder Level</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.reorderLevel}
+                  onChange={e => setForm(f => ({ ...f, reorderLevel: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.reorderLevel ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.reorderLevel && <p className="text-xs text-destructive mt-1">{fieldErrors.reorderLevel}</p>}
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Barcode (optional)</Label>
+                <Input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className="mt-1" />
+              </div>
+              <div>
+                <Label>Asset Tag (optional)</Label>
+                <Input value={form.assetTag} onChange={e => setForm(f => ({ ...f, assetTag: e.target.value }))} className="mt-1" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <Label>Track Expiry</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Requires an expiry date on every stock-in; feeds the expiring-soon report</p>
+              </div>
+              <Switch checked={form.trackExpiry} onCheckedChange={checked => setForm(f => ({ ...f, trackExpiry: checked }))} />
+            </div>
+            <div>
+              <Label>Description (optional)</Label>
+              <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="mt-1" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+            <Button onClick={handleSave} disabled={isSubmitting || !form.name.trim() || !form.categoryId || !form.unitId}>
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editing ? 'Save Changes' : 'Create Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTarget?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. Items with existing stock or movement history cannot be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && (
+            <Alert variant="destructive"><AlertDescription>{deleteError}</AlertDescription></Alert>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-white hover:bg-destructive/90">
+              {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

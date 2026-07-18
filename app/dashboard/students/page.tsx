@@ -1,767 +1,567 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
-import { studentService, parentService } from '@/lib/services'
-import type { Student, Parent } from '@/lib/types'
+import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Textarea } from '@/components/ui/textarea'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Plus,
-  Search,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  Users,
-  GraduationCap,
-  Phone,
-  Mail,
-  MapPin,
-  Calendar,
-  UserPlus,
-  Eye,
-  Link as LinkIcon,
-} from 'lucide-react'
-import { formatDate, getInitials } from '@/lib/utils'
-import { StatsTablePageSkeleton } from '@/components/ui/page-skeleton'
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import { ParentFormDialog } from '@/components/parents/parent-form-dialog'
+import { studentService, type Student, type StudentGender, type CreateStudentRequest } from '@/lib/services/student'
+import { parentService, type ParentDropdownItem, type Parent } from '@/lib/services/parent'
+import { emailError, numberError, requiredError, hasNoErrors } from '@/lib/validation'
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, GraduationCap, Eye, UserPlus } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+
+const RELATIONSHIPS = ['FATHER', 'MOTHER', 'GUARDIAN']
+const GENDERS: StudentGender[] = ['MALE', 'FEMALE', 'OTHER']
+
+const EMPTY_FORM = {
+  firstName: '', lastName: '', admissionDate: new Date().toISOString().slice(0, 10),
+  gender: '' as StudentGender | '', dateOfBirth: '', bloodGroup: '', nationality: '', address: '',
+  medicalNotes: '', previousSchool: '', email: '', grNumber: '', enrollmentNo: '',
+  guardianIncome: '', householdIncome: '', familyMembersCount: '',
+}
+
+const EMPTY_GUARDIAN = { parentUserId: '', relationship: 'FATHER' }
 
 export default function StudentsPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
+
   const [students, setStudents] = useState<Student[]>([])
-  const [parents, setParents] = useState<Parent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterClass, setFilterClass] = useState<string>('all')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [isViewOpen, setIsViewOpen] = useState(false)
-  const [isLinkParentOpen, setIsLinkParentOpen] = useState(false)
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
-  const [selectedParent, setSelectedParent] = useState<Parent | null>(null)
-  const [classes, setClasses] = useState<string[]>([])
-  
-  const [newStudent, setNewStudent] = useState({
-    name: '',
-    rollNumber: '',
-    className: '',
-    section: '',
-    email: '',
-    phone: '',
-    dateOfBirth: '',
-    gender: 'male' as Student['gender'],
-    address: '',
-    admissionDate: new Date().toISOString().split('T')[0],
-  })
+  const [total, setTotal] = useState(0)
+  const [parents, setParents] = useState<ParentDropdownItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [search, setSearch] = useState('')
 
-  const tenantId = user?.tenantId || 'tenant_1'
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<Student | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [guardian, setGuardian] = useState(EMPTY_GUARDIAN)
 
-  useEffect(() => {
-    loadData()
-  }, [tenantId])
+  const [newParentDialogOpen, setNewParentDialogOpen] = useState(false)
 
-  const loadData = async () => {
-    setLoading(true)
-    const [studentsData, classesData, parentsData] = await Promise.all([
-      studentService.getStudents(tenantId),
-      studentService.getClasses(tenantId),
-      parentService.getParents(tenantId),
-    ])
-    setStudents(studentsData)
-    setClasses(classesData)
-    setParents(parentsData)
-    setLoading(false)
-  }
+  const [viewing, setViewing] = useState<Student | null>(null)
+  const [isViewLoading, setIsViewLoading] = useState(false)
 
-  const handleCreateStudent = async () => {
-    if (!newStudent.name || !newStudent.rollNumber || !newStudent.className) return
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
-    await studentService.createStudent({
-      ...newStudent,
-      tenantId,
-      status: 'active',
-    })
+  const loadParents = useCallback(async () => {
+    const dropdown = await parentService.getParentsDropdown()
+    setParents(dropdown)
+    return dropdown
+  }, [])
 
-    setNewStudent({
-      name: '',
-      rollNumber: '',
-      className: '',
-      section: '',
-      email: '',
-      phone: '',
-      dateOfBirth: '',
-      gender: 'male',
-      address: '',
-      admissionDate: new Date().toISOString().split('T')[0],
-    })
-    setIsCreateOpen(false)
-    loadData()
-  }
-
-  const handleLinkParent = async () => {
-    if (!selectedStudent || !selectedParent) return
-    
-    await parentService.linkStudentToParent(selectedParent.id, selectedStudent.id)
-    setIsLinkParentOpen(false)
-    setSelectedParent(null)
-    loadData()
-    
-    // Refresh the selected student view
-    const updated = await studentService.getStudent(selectedStudent.id)
-    setSelectedStudent(updated)
-  }
-
-  const handleUnlinkParent = async (studentId: string, parentId: string) => {
-    await parentService.unlinkStudentFromParent(parentId, studentId)
-    loadData()
-    
-    // Refresh the selected student view
-    if (selectedStudent?.id === studentId) {
-      const updated = await studentService.getStudent(studentId)
-      setSelectedStudent(updated)
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError('')
+    try {
+      const result = await studentService.getStudents({ limit: 100, search: search || undefined })
+      setStudents(result.data)
+      setTotal(result.total)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load students.')
+    } finally {
+      setIsLoading(false)
     }
+  }, [search])
+
+  useEffect(() => { loadParents() }, [loadParents])
+  useEffect(() => { loadData() }, [loadData])
+
+  if (!can('students.student.read')) return <AccessDenied />
+
+  const openCreate = () => {
+    setEditing(null)
+    setForm(EMPTY_FORM)
+    setGuardian(EMPTY_GUARDIAN)
+    setSubmitError('')
+    setFieldErrors({})
+    setDialogOpen(true)
   }
 
-  const getStudentParent = (studentId: string) => {
-    return parents.find(p => p.studentIds.includes(studentId))
+  const openEdit = (student: Student) => {
+    setEditing(student)
+    setForm({
+      firstName: student.firstName,
+      lastName: student.lastName,
+      admissionDate: student.admissionDate?.slice(0, 10) ?? '',
+      gender: student.gender ?? '',
+      dateOfBirth: student.dateOfBirth ?? '',
+      bloodGroup: student.bloodGroup ?? '',
+      nationality: student.nationality ?? '',
+      address: student.address ?? '',
+      medicalNotes: student.medicalNotes ?? '',
+      previousSchool: student.previousSchool ?? '',
+      email: student.email ?? '',
+      grNumber: student.grNumber ?? '',
+      enrollmentNo: student.enrollmentNo ?? '',
+      guardianIncome: student.guardianIncome ?? '',
+      householdIncome: student.householdIncome ?? '',
+      familyMembersCount: student.familyMembersCount != null ? String(student.familyMembersCount) : '',
+    })
+    setSubmitError('')
+    setFieldErrors({})
+    setDialogOpen(true)
   }
 
-  const filteredStudents = students.filter(student => {
-    const matchesSearch = 
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.rollNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.email?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesClass = filterClass === 'all' || student.className === filterClass
-    const matchesStatus = filterStatus === 'all' || student.status === filterStatus
-    return matchesSearch && matchesClass && matchesStatus
-  })
+  const openView = async (student: Student) => {
+    setViewing(student)
+    setIsViewLoading(true)
+    const full = await studentService.getStudent(student.id)
+    if (full) setViewing(full)
+    setIsViewLoading(false)
+  }
 
-  const getStatusColor = (status: Student['status']) => {
-    switch (status) {
-      case 'active': return 'bg-green-500/10 text-green-600 border-green-200'
-      case 'inactive': return 'bg-gray-500/10 text-gray-600 border-gray-200'
-      case 'graduated': return 'bg-blue-500/10 text-blue-600 border-blue-200'
-      case 'transferred': return 'bg-orange-500/10 text-orange-600 border-orange-200'
-      default: return ''
+  const handleParentCreated = async (parent: Parent) => {
+    await loadParents()
+    setGuardian(g => ({ ...g, parentUserId: parent.id }))
+  }
+
+  const isValid =
+    form.firstName.trim() && form.lastName.trim() && form.admissionDate &&
+    (!!editing || guardian.parentUserId)
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const firstNameErr = requiredError(form.firstName, 'First name')
+    if (firstNameErr) errors.firstName = firstNameErr
+    const lastNameErr = requiredError(form.lastName, 'Last name')
+    if (lastNameErr) errors.lastName = lastNameErr
+    const emailErr = emailError(form.email, false)
+    if (emailErr) errors.email = emailErr
+    const guardianIncomeErr = numberError(form.guardianIncome, { min: 0, label: 'Guardian income' })
+    if (guardianIncomeErr) errors.guardianIncome = guardianIncomeErr
+    const householdIncomeErr = numberError(form.householdIncome, { min: 0, label: 'Household income' })
+    if (householdIncomeErr) errors.householdIncome = householdIncomeErr
+    const familyMembersErr = numberError(form.familyMembersCount, { min: 0, label: 'Family members' })
+    if (familyMembersErr) errors.familyMembersCount = familyMembersErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
+  const handleSave = async () => {
+    if (!isValid || !validate()) return
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    const basePayload = {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      admissionDate: form.admissionDate,
+      gender: form.gender || undefined,
+      dateOfBirth: form.dateOfBirth || undefined,
+      bloodGroup: form.bloodGroup.trim() || undefined,
+      nationality: form.nationality.trim() || undefined,
+      address: form.address.trim() || undefined,
+      medicalNotes: form.medicalNotes.trim() || undefined,
+      previousSchool: form.previousSchool.trim() || undefined,
+      email: form.email.trim() || undefined,
+      grNumber: form.grNumber.trim() || undefined,
+      enrollmentNo: form.enrollmentNo.trim() || undefined,
+      guardianIncome: form.guardianIncome.trim() || undefined,
+      householdIncome: form.householdIncome.trim() || undefined,
+      familyMembersCount: form.familyMembersCount ? Number(form.familyMembersCount) : undefined,
     }
+
+    const result = editing
+      ? await studentService.updateStudent(editing.id, basePayload)
+      : await studentService.createStudent({
+          ...basePayload,
+          guardian: { parentUserId: guardian.parentUserId, relationship: guardian.relationship },
+        } as CreateStudentRequest)
+
+    if (result.error || !result.data) {
+      setSubmitError(result.error || 'Operation failed')
+      setIsSubmitting(false)
+      return
+    }
+
+    setDialogOpen(false)
+    setIsSubmitting(false)
+    loadData()
   }
 
-  const stats = {
-    total: students.length,
-    active: students.filter(s => s.status === 'active').length,
-    inactive: students.filter(s => s.status === 'inactive').length,
-    byClass: classes.map(c => ({
-      name: c,
-      count: students.filter(s => s.className === c).length
-    }))
-  }
-
-  if (loading) {
-    return <StatsTablePageSkeleton statCount={4} />
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    setDeleteError('')
+    const { error } = await studentService.deleteStudent(deleteTarget.id)
+    setIsDeleting(false)
+    if (error) { setDeleteError(error); return }
+    setDeleteTarget(null)
+    loadData()
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Student Management</h1>
-          <p className="text-muted-foreground">Manage students and their information</p>
-        </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Student
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Students"
+        description="The official student register — every enrollment, invoice, and parent link points here"
+        action={
+          can('students.student.create') && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button onClick={openCreate}>
+                <Plus className="mr-2 h-4 w-4" /> Add Student
+              </Button>
+            </div>
+          )
+        }
+      />
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <GraduationCap className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                <p className="text-sm text-muted-foreground">Total Students</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-500/10">
-                <Users className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.active}</p>
-                <p className="text-sm text-muted-foreground">Active Students</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-orange-500/10">
-                <Users className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{classes.length}</p>
-                <p className="text-sm text-muted-foreground">Classes</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <UserPlus className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">
-                  {students.filter(s => s.parentId).length}
-                </p>
-                <p className="text-sm text-muted-foreground">With Parents Linked</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search students..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <Select value={filterClass} onValueChange={setFilterClass}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="All Classes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Classes</SelectItem>
-                {classes.map(c => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="graduated">Graduated</SelectItem>
-                <SelectItem value="transferred">Transferred</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Students Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Students ({filteredStudents.length})</CardTitle>
+          <CardTitle>All Students ({total})</CardTitle>
+          <div className="relative max-w-sm mt-3">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or admission number…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </CardHeader>
         <CardContent>
+          {loadError && <Alert variant="destructive" className="mb-4"><AlertDescription>{loadError}</AlertDescription></Alert>}
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Roll No.</TableHead>
-                <TableHead>Class</TableHead>
-                <TableHead>Parent</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-12">Actions</TableHead>
+                <TableHead>Admission #</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Gender</TableHead>
+                <TableHead>Admission Date</TableHead>
+                <TableHead>Guardian</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStudents.map((student) => {
-                const parent = getStudentParent(student.id)
-                return (
-                  <TableRow key={student.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarFallback className="bg-primary/10 text-primary">
-                            {getInitials(student.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-foreground">{student.name}</p>
-                          {student.email && (
-                            <p className="text-xs text-muted-foreground">{student.email}</p>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{student.rollNumber}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{student.className}</p>
-                        {student.section && (
-                          <p className="text-xs text-muted-foreground">Section {student.section}</p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {parent ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-green-500" title="Parent Linked" />
-                          <span className="text-sm">{parent.name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Not linked</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {student.phone && (
-                        <p className="text-sm">{student.phone}</p>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={getStatusColor(student.status)}>
-                        {student.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedStudent(student)
-                            setIsViewOpen(true)
-                          }}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedStudent(student)
-                            setIsLinkParentOpen(true)
-                          }}>
-                            <LinkIcon className="h-4 w-4 mr-2" />
-                            Link Parent
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-              {filteredStudents.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No students found
-                  </TableCell>
-                </TableRow>
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={6} />
+              ) : (
+                <>
+                  {students.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                        <GraduationCap className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        No students found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {students.map(student => (
+                    <TableRow key={student.id}>
+                      <TableCell>
+                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{student.admissionNumber ?? '—'}</span>
+                      </TableCell>
+                      <TableCell className="font-semibold">{student.firstName} {student.lastName}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm capitalize">{student.gender?.toLowerCase() ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{student.admissionDate ? new Date(student.admissionDate).toLocaleDateString() : '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {student.guardian ? `${student.guardian.firstName ?? ''} ${student.guardian.lastName ?? ''}`.trim() || student.guardian.email : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openView(student)}>
+                              <Eye className="mr-2 h-4 w-4" /> View
+                            </DropdownMenuItem>
+                            {can('students.student.update') && (
+                              <DropdownMenuItem onClick={() => openEdit(student)}>
+                                <Edit className="mr-2 h-4 w-4" /> Edit
+                              </DropdownMenuItem>
+                            )}
+                            {can('students.student.delete') && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => { setDeleteTarget(student); setDeleteError('') }} className="text-destructive">
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Create Student Dialog */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-lg">
+      {/* Create / Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add New Student</DialogTitle>
-            <DialogDescription>Enter student details to add them to the system</DialogDescription>
+            <DialogTitle>{editing ? 'Edit Student' : 'Add Student'}</DialogTitle>
+            <DialogDescription>
+              {editing ? `Update details for ${editing.firstName} ${editing.lastName}` : 'Create a new student profile. An admission number is generated automatically.'}
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Full Name *</Label>
+          {submitError && <Alert variant="destructive"><AlertDescription>{submitError}</AlertDescription></Alert>}
+
+          <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>First Name <span className="text-destructive">*</span></Label>
                 <Input
-                  value={newStudent.name}
-                  onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
-                  placeholder="Student name"
+                  value={form.firstName}
+                  onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.firstName ? 'border-destructive' : ''}`}
                 />
+                {fieldErrors.firstName && <p className="text-xs text-destructive mt-1">{fieldErrors.firstName}</p>}
               </div>
-              <div className="space-y-2">
-                <Label>Roll Number *</Label>
+              <div>
+                <Label>Last Name <span className="text-destructive">*</span></Label>
                 <Input
-                  value={newStudent.rollNumber}
-                  onChange={(e) => setNewStudent({ ...newStudent, rollNumber: e.target.value })}
-                  placeholder="Roll number"
+                  value={form.lastName}
+                  onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.lastName ? 'border-destructive' : ''}`}
                 />
+                {fieldErrors.lastName && <p className="text-xs text-destructive mt-1">{fieldErrors.lastName}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Class *</Label>
-                <Select
-                  value={newStudent.className}
-                  onValueChange={(v) => setNewStudent({ ...newStudent, className: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {classes.map(c => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <Label>Admission Date <span className="text-destructive">*</span></Label>
+                <Input type="date" value={form.admissionDate} onChange={e => setForm(f => ({ ...f, admissionDate: e.target.value }))} className="mt-1" />
               </div>
-              <div className="space-y-2">
-                <Label>Section</Label>
-                <Select
-                  value={newStudent.section}
-                  onValueChange={(v) => setNewStudent({ ...newStudent, section: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A">Section A</SelectItem>
-                    <SelectItem value="B">Section B</SelectItem>
-                    <SelectItem value="C">Section C</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
+              <div>
                 <Label>Gender</Label>
-                <Select
-                  value={newStudent.gender}
-                  onValueChange={(v) => setNewStudent({ ...newStudent, gender: v as Student['gender'] })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                <Select value={form.gender || undefined} onValueChange={v => setForm(f => ({ ...f, gender: v as StudentGender }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    {GENDERS.map(g => <SelectItem key={g} value={g}>{g.charAt(0) + g.slice(1).toLowerCase()}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Date of Birth</Label>
+                <Input type="date" value={form.dateOfBirth} onChange={e => setForm(f => ({ ...f, dateOfBirth: e.target.value }))} className="mt-1" />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Email</Label>
+
+            {!editing && (
+              <div className="rounded-lg border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Guardian <span className="text-destructive">*</span></Label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setNewParentDialogOpen(true)}>
+                    <UserPlus className="h-3.5 w-3.5 mr-1" /> New Parent
+                  </Button>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs">Parent</Label>
+                    <Combobox
+                      value={guardian.parentUserId}
+                      onValueChange={v => setGuardian(g => ({ ...g, parentUserId: v }))}
+                      options={parents.map(p => ({ value: p.id, label: p.name, keywords: p.email }))}
+                      placeholder="Select parent"
+                      searchPlaceholder="Search parents…"
+                      emptyText="No parents found."
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Relationship</Label>
+                    <Select value={guardian.relationship} onValueChange={v => setGuardian(g => ({ ...g, relationship: v }))}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {RELATIONSHIPS.map(r => <SelectItem key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Blood Group</Label>
+                <Input value={form.bloodGroup} onChange={e => setForm(f => ({ ...f, bloodGroup: e.target.value }))} placeholder="e.g. B+" className="mt-1" />
+              </div>
+              <div>
+                <Label>Nationality</Label>
+                <Input value={form.nationality} onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))} className="mt-1" />
+              </div>
+            </div>
+
+            <div>
+              <Label>Address</Label>
+              <Textarea rows={2} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className="mt-1" />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Email (optional)</Label>
                 <Input
                   type="email"
-                  value={newStudent.email}
-                  onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
-                  placeholder="student@email.com"
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.email ? 'border-destructive' : ''}`}
                 />
+                {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
               </div>
-              <div className="space-y-2">
-                <Label>Phone</Label>
-                <Input
-                  value={newStudent.phone}
-                  onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })}
-                  placeholder="Phone number"
-                />
+              <div>
+                <Label>Previous School</Label>
+                <Input value={form.previousSchool} onChange={e => setForm(f => ({ ...f, previousSchool: e.target.value }))} className="mt-1" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Date of Birth</Label>
-                <Input
-                  type="date"
-                  value={newStudent.dateOfBirth}
-                  onChange={(e) => setNewStudent({ ...newStudent, dateOfBirth: e.target.value })}
-                />
+
+            <div>
+              <Label>Medical Notes</Label>
+              <Textarea rows={2} value={form.medicalNotes} onChange={e => setForm(f => ({ ...f, medicalNotes: e.target.value }))} className="mt-1" />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>GR Number</Label>
+                <Input value={form.grNumber} onChange={e => setForm(f => ({ ...f, grNumber: e.target.value }))} className="mt-1" />
               </div>
-              <div className="space-y-2">
-                <Label>Admission Date</Label>
-                <Input
-                  type="date"
-                  value={newStudent.admissionDate}
-                  onChange={(e) => setNewStudent({ ...newStudent, admissionDate: e.target.value })}
-                />
+              <div>
+                <Label>Enrollment No.</Label>
+                <Input value={form.enrollmentNo} onChange={e => setForm(f => ({ ...f, enrollmentNo: e.target.value }))} className="mt-1" />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Input
-                value={newStudent.address}
-                onChange={(e) => setNewStudent({ ...newStudent, address: e.target.value })}
-                placeholder="Full address"
-              />
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <Label>Guardian Income</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.guardianIncome}
+                  onChange={e => setForm(f => ({ ...f, guardianIncome: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.guardianIncome ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.guardianIncome && <p className="text-xs text-destructive mt-1">{fieldErrors.guardianIncome}</p>}
+              </div>
+              <div>
+                <Label>Household Income</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.householdIncome}
+                  onChange={e => setForm(f => ({ ...f, householdIncome: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.householdIncome ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.householdIncome && <p className="text-xs text-destructive mt-1">{fieldErrors.householdIncome}</p>}
+              </div>
+              <div>
+                <Label>Family Members</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.familyMembersCount}
+                  onChange={e => setForm(f => ({ ...f, familyMembersCount: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.familyMembersCount ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.familyMembersCount && <p className="text-xs text-destructive mt-1">{fieldErrors.familyMembersCount}</p>}
+              </div>
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateStudent}>
-              Add Student
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
+            <Button onClick={handleSave} disabled={isSubmitting || !isValid}>
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editing ? 'Save Changes' : 'Create Student'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* View Student Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          {selectedStudent && (
-            <>
-              <DialogHeader>
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    <AvatarFallback className="bg-primary/10 text-primary text-xl">
-                      {getInitials(selectedStudent.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <DialogTitle className="text-xl">{selectedStudent.name}</DialogTitle>
-                    <DialogDescription>
-                      {selectedStudent.className} {selectedStudent.section && `- Section ${selectedStudent.section}`}
-                    </DialogDescription>
-                    <Badge variant="outline" className={`mt-1 ${getStatusColor(selectedStudent.status)}`}>
-                      {selectedStudent.status}
-                    </Badge>
-                  </div>
-                </div>
-              </DialogHeader>
+      <ParentFormDialog
+        open={newParentDialogOpen}
+        onOpenChange={setNewParentDialogOpen}
+        onSaved={handleParentCreated}
+      />
 
-              <Tabs defaultValue="info" className="mt-4">
-                <TabsList>
-                  <TabsTrigger value="info">Information</TabsTrigger>
-                  <TabsTrigger value="parent">Parent/Guardian</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="info" className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Roll Number</p>
-                      <p className="font-medium font-mono">{selectedStudent.rollNumber}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Admission Date</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        {formatDate(selectedStudent.admissionDate)}
-                      </p>
-                    </div>
-                    {selectedStudent.dateOfBirth && (
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Date of Birth</p>
-                        <p className="font-medium">{formatDate(selectedStudent.dateOfBirth)}</p>
-                      </div>
-                    )}
-                    {selectedStudent.gender && (
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Gender</p>
-                        <p className="font-medium capitalize">{selectedStudent.gender}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="border-t pt-4 space-y-3">
-                    <h4 className="font-medium">Contact Information</h4>
-                    {selectedStudent.email && (
-                      <p className="text-sm flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        {selectedStudent.email}
-                      </p>
-                    )}
-                    {selectedStudent.phone && (
-                      <p className="text-sm flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        {selectedStudent.phone}
-                      </p>
-                    )}
-                    {selectedStudent.address && (
-                      <p className="text-sm flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        {selectedStudent.address}
-                      </p>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="parent" className="space-y-4 mt-4">
-                  {(() => {
-                    const parent = getStudentParent(selectedStudent.id)
-                    if (parent) {
-                      return (
-                        <Card>
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-12 w-12">
-                                  <AvatarFallback className="bg-blue-500/10 text-blue-600">
-                                    {getInitials(parent.name)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-medium">{parent.name}</p>
-                                  <p className="text-sm text-muted-foreground capitalize">{parent.relation}</p>
-                                </div>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleUnlinkParent(selectedStudent.id, parent.id)}
-                              >
-                                Unlink
-                              </Button>
-                            </div>
-                            <div className="mt-4 space-y-2 text-sm">
-                              <p className="flex items-center gap-2">
-                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                {parent.email}
-                              </p>
-                              <p className="flex items-center gap-2">
-                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                {parent.phone}
-                              </p>
-                              {parent.canLogin && (
-                                <Badge variant="outline" className="bg-green-500/10 text-green-600">
-                                  Portal Access Enabled
-                                </Badge>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )
-                    }
-                    return (
-                      <div className="text-center py-8">
-                        <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-                        <p className="text-muted-foreground mb-4">No parent/guardian linked</p>
-                        <Button onClick={() => setIsLinkParentOpen(true)}>
-                          <LinkIcon className="h-4 w-4 mr-2" />
-                          Link Parent
-                        </Button>
-                      </div>
-                    )
-                  })()}
-                </TabsContent>
-              </Tabs>
-            </>
+      {/* View Dialog */}
+      <Dialog open={!!viewing} onOpenChange={open => !open && setViewing(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{viewing?.firstName} {viewing?.lastName}</DialogTitle>
+            <DialogDescription>{viewing?.admissionNumber}</DialogDescription>
+          </DialogHeader>
+          {isViewLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><p className="text-muted-foreground">Gender</p><p className="font-medium capitalize">{viewing?.gender?.toLowerCase() ?? '—'}</p></div>
+              <div><p className="text-muted-foreground">Date of Birth</p><p className="font-medium">{viewing?.dateOfBirth ?? '—'}</p></div>
+              <div><p className="text-muted-foreground">Blood Group</p><p className="font-medium">{viewing?.bloodGroup ?? '—'}</p></div>
+              <div><p className="text-muted-foreground">Nationality</p><p className="font-medium">{viewing?.nationality ?? '—'}</p></div>
+              <div className="col-span-2"><p className="text-muted-foreground">Address</p><p className="font-medium">{viewing?.address ?? '—'}</p></div>
+              <div className="col-span-2"><p className="text-muted-foreground">Previous School</p><p className="font-medium">{viewing?.previousSchool ?? '—'}</p></div>
+              <div className="col-span-2"><p className="text-muted-foreground">Medical Notes</p><p className="font-medium">{viewing?.medicalNotes ?? '—'}</p></div>
+              <div>
+                <p className="text-muted-foreground">Guardian</p>
+                <p className="font-medium">
+                  {viewing?.guardian
+                    ? `${viewing.guardian.firstName ?? ''} ${viewing.guardian.lastName ?? ''}`.trim() || viewing.guardian.email
+                    : '—'}
+                </p>
+                {viewing?.guardian?.relationship && <Badge variant="secondary" className="mt-1">{viewing.guardian.relationship}</Badge>}
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Link Parent Dialog */}
-      <Dialog open={isLinkParentOpen} onOpenChange={setIsLinkParentOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Link Parent/Guardian</DialogTitle>
-            <DialogDescription>
-              Select an existing parent or create a new one
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Select Parent</Label>
-              <Select
-                value={selectedParent?.id || ''}
-                onValueChange={(v) => {
-                  const p = parents.find(p => p.id === v)
-                  setSelectedParent(p || null)
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a parent..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {parents.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{p.name}</span>
-                        <span className="text-muted-foreground text-xs capitalize">({p.relation})</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedParent && (
-              <Card>
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback>{getInitials(selectedParent.name)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{selectedParent.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedParent.email} | {selectedParent.phone}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedParent.studentIds.length} student(s) linked
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsLinkParentOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleLinkParent} disabled={!selectedParent}>
-              Link Parent
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTarget?.firstName} {deleteTarget?.lastName}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. Students with invoices or enrollments cannot be deleted — withdraw their enrollment instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && <Alert variant="destructive"><AlertDescription>{deleteError}</AlertDescription></Alert>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-white hover:bg-destructive/90">
+              {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

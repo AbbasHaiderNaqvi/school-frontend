@@ -43,6 +43,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/layout/page-header'
 import { AccessDenied } from '@/components/ui/access-denied'
 import { ManageUserGroupsDialog } from '@/components/users/manage-user-groups-dialog'
+import { emailError, phoneError, hasNoErrors } from '@/lib/validation'
 import {
   UserPlus, Edit, Trash2, Search, MoreHorizontal,
   Lock, CheckCircle, XCircle, Loader2, Copy, RefreshCw, ShieldCheck,
@@ -89,6 +90,7 @@ export default function UserManagementPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [setupUrl, setSetupUrl] = useState('')
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
   const [manageGroupsUser, setManageGroupsUser] = useState<UserListItem | null>(null)
@@ -118,7 +120,26 @@ export default function UserManagementPage() {
 
   if (!can('users.user.read')) return <AccessDenied />
 
+  const validateAdd = (): boolean => {
+    const errors: Record<string, string> = {}
+    const emailErr = emailError(addForm.email)
+    if (emailErr) errors.email = emailErr
+    const phoneErr = phoneError(addForm.phone, false)
+    if (phoneErr) errors.phone = phoneErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
+  const validateEdit = (): boolean => {
+    const errors: Record<string, string> = {}
+    const phoneErr = phoneError(editForm.phone, false)
+    if (phoneErr) errors.phone = phoneErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleCreate = async () => {
+    if (!validateAdd()) return
     setIsSubmitting(true)
     setSubmitError('')
     const payload = {
@@ -145,6 +166,7 @@ export default function UserManagementPage() {
 
   const handleUpdate = async () => {
     if (!selectedUser) return
+    if (!validateEdit()) return
     setIsSubmitting(true)
     setSubmitError('')
     const updated = await usersService.update(selectedUser.id, editForm)
@@ -186,6 +208,7 @@ export default function UserManagementPage() {
     setSelectedUser(u)
     setEditForm({ fullName: u.fullName, phone: u.phone || '' })
     setSubmitError('')
+    setFieldErrors({})
     setIsEditOpen(true)
   }
 
@@ -196,7 +219,7 @@ export default function UserManagementPage() {
         description="Manage users, roles, and account access"
         action={
           can('users.user.create') && (
-            <Button onClick={() => { setSetupUrl(''); setSubmitError(''); setIsAddOpen(true) }}>
+            <Button onClick={() => { setSetupUrl(''); setSubmitError(''); setFieldErrors({}); setIsAddOpen(true) }}>
               <UserPlus className="mr-2 h-4 w-4" /> Invite User
             </Button>
           )
@@ -333,7 +356,7 @@ export default function UserManagementPage() {
       </Card>
 
       {/* Invite User Dialog */}
-      <Dialog open={isAddOpen} onOpenChange={(o) => { if (!o) { setSetupUrl(''); setSubmitError('') } setIsAddOpen(o) }}>
+      <Dialog open={isAddOpen} onOpenChange={(o) => { if (!o) { setSetupUrl(''); setSubmitError(''); setFieldErrors({}) } setIsAddOpen(o) }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Invite New User</DialogTitle>
@@ -366,11 +389,24 @@ export default function UserManagementPage() {
                   </div>
                   <div className="col-span-2">
                     <Label>Email</Label>
-                    <Input type="email" value={addForm.email} onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@school.edu" className="mt-1" />
+                    <Input
+                      type="email"
+                      value={addForm.email}
+                      onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                      placeholder="jane@school.edu"
+                      className={`mt-1 ${fieldErrors.email ? 'border-destructive' : ''}`}
+                    />
+                    {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
                   </div>
                   <div>
                     <Label>Phone (optional)</Label>
-                    <Input value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} placeholder="+92 300 0000000" className="mt-1" />
+                    <Input
+                      value={addForm.phone}
+                      onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
+                      placeholder="+92 300 0000000"
+                      className={`mt-1 ${fieldErrors.phone ? 'border-destructive' : ''}`}
+                    />
+                    {fieldErrors.phone && <p className="text-xs text-destructive mt-1">{fieldErrors.phone}</p>}
                   </div>
                   <div>
                     <Label>Role</Label>
@@ -425,7 +461,12 @@ export default function UserManagementPage() {
             </div>
             <div>
               <Label>Phone</Label>
-              <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+              <Input
+                value={editForm.phone}
+                onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                className={fieldErrors.phone ? 'border-destructive' : ''}
+              />
+              {fieldErrors.phone && <p className="text-xs text-destructive mt-1">{fieldErrors.phone}</p>}
             </div>
           </div>
           <DialogFooter>

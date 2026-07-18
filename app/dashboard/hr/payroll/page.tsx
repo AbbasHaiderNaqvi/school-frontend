@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -22,6 +23,7 @@ import {
 import { hrService } from '@/lib/services/hr'
 import type { PayrollRecord, PayrollSummary, Employee } from '@/lib/services/hr'
 import { DEFAULT_CURRENCY, money, fmt } from '@/lib/currency'
+import { requiredError, numberError, hasNoErrors } from '@/lib/validation'
 import { Plus, Trash2, Loader2, RefreshCw, DollarSign, Users, CheckCircle, BookCheck } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -71,6 +73,8 @@ export default function PayrollPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [kvErrors, setKvErrors] = useState<Record<string, string>>({})
   const [form, setForm] = useState(EMPTY_FORM)
 
   const [detailRecord, setDetailRecord] = useState<PayrollRecord | null>(null)
@@ -105,6 +109,8 @@ export default function PayrollPage() {
   const openCreate = () => {
     setForm(EMPTY_FORM)
     setSubmitError('')
+    setFieldErrors({})
+    setKvErrors({})
     setDialogOpen(true)
   }
 
@@ -130,8 +136,33 @@ export default function PayrollPage() {
   const previewNet =
     (parseFloat(form.basicSalary) || 0) + sumKV(form.allowances) - sumKV(form.deductions)
 
+  const isValid = !!form.employeeId && !!form.effectiveDate && !!form.basicSalary
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const employeeErr = requiredError(form.employeeId, 'Employee')
+    if (employeeErr) errors.employeeId = employeeErr
+    const effectiveDateErr = requiredError(form.effectiveDate, 'Effective date')
+    if (effectiveDateErr) errors.effectiveDate = effectiveDateErr
+    const basicSalaryErr = numberError(form.basicSalary, { required: true, min: 0, label: 'Basic salary' })
+    if (basicSalaryErr) errors.basicSalary = basicSalaryErr
+
+    const kErrors: Record<string, string> = {}
+    ;(['allowances', 'deductions'] as const).forEach(section => {
+      form[section].forEach((row, idx) => {
+        if (!row.key.trim() && !row.value.trim()) return
+        const valueErr = numberError(row.value, { required: true, min: 0, label: 'Amount' })
+        if (valueErr) kErrors[`${section}-${idx}`] = valueErr
+      })
+    })
+
+    setFieldErrors(errors)
+    setKvErrors(kErrors)
+    return hasNoErrors(errors) && hasNoErrors(kErrors)
+  }
+
   const handleSave = async () => {
-    if (!form.employeeId || !form.effectiveDate || !form.basicSalary) return
+    if (!isValid || !validate()) return
     setIsSubmitting(true)
     setSubmitError('')
     const result = await hrService.createPayroll({
@@ -307,15 +338,16 @@ export default function PayrollPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <Label>Employee <span className="text-destructive">*</span></Label>
-                <Select value={form.employeeId || 'none'} onValueChange={v => setForm(f => ({ ...f, employeeId: v === 'none' ? '' : v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select employee" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Select —</SelectItem>
-                    {employees.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={form.employeeId}
+                  onValueChange={v => setForm(f => ({ ...f, employeeId: v }))}
+                  options={employees.map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}`, keywords: e.email }))}
+                  placeholder="Select employee"
+                  searchPlaceholder="Search employees…"
+                  emptyText="No employees found."
+                  className={`mt-1 ${fieldErrors.employeeId ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.employeeId && <p className="text-xs text-destructive mt-1">{fieldErrors.employeeId}</p>}
               </div>
               <div>
                 <Label>Effective Date <span className="text-destructive">*</span></Label>
@@ -323,8 +355,9 @@ export default function PayrollPage() {
                   type="date"
                   value={form.effectiveDate}
                   onChange={e => setForm(f => ({ ...f, effectiveDate: e.target.value }))}
-                  className="mt-1"
+                  className={`mt-1 ${fieldErrors.effectiveDate ? 'border-destructive' : ''}`}
                 />
+                {fieldErrors.effectiveDate && <p className="text-xs text-destructive mt-1">{fieldErrors.effectiveDate}</p>}
               </div>
               <div>
                 <Label>Basic Salary ({DEFAULT_CURRENCY.code}) <span className="text-destructive">*</span></Label>
@@ -334,8 +367,9 @@ export default function PayrollPage() {
                   value={form.basicSalary}
                   onChange={e => setForm(f => ({ ...f, basicSalary: e.target.value }))}
                   placeholder="e.g. 50000"
-                  className="mt-1"
+                  className={`mt-1 ${fieldErrors.basicSalary ? 'border-destructive' : ''}`}
                 />
+                {fieldErrors.basicSalary && <p className="text-xs text-destructive mt-1">{fieldErrors.basicSalary}</p>}
               </div>
             </div>
 
@@ -348,24 +382,27 @@ export default function PayrollPage() {
               </div>
               <div className="space-y-2">
                 {form.allowances.map((row, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <Input
-                      placeholder="Label (e.g. houseRent)"
-                      value={row.key}
-                      onChange={e => setKV('allowances', i, 'key', e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      min={0}
-                      placeholder="Amount"
-                      value={row.value}
-                      onChange={e => setKV('allowances', i, 'value', e.target.value)}
-                      className="w-32"
-                    />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeKV('allowances', i)}>
-                      <Trash2 className="h-4 w-4 text-muted-foreground" />
-                    </Button>
+                  <div key={i}>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        placeholder="Label (e.g. houseRent)"
+                        value={row.key}
+                        onChange={e => setKV('allowances', i, 'key', e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="Amount"
+                        value={row.value}
+                        onChange={e => setKV('allowances', i, 'value', e.target.value)}
+                        className={`w-32 ${kvErrors[`allowances-${i}`] ? 'border-destructive' : ''}`}
+                      />
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeKV('allowances', i)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                    {kvErrors[`allowances-${i}`] && <p className="text-xs text-destructive mt-1">{kvErrors[`allowances-${i}`]}</p>}
                   </div>
                 ))}
               </div>
@@ -380,24 +417,27 @@ export default function PayrollPage() {
               </div>
               <div className="space-y-2">
                 {form.deductions.map((row, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <Input
-                      placeholder="Label (e.g. providentFund)"
-                      value={row.key}
-                      onChange={e => setKV('deductions', i, 'key', e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      min={0}
-                      placeholder="Amount"
-                      value={row.value}
-                      onChange={e => setKV('deductions', i, 'value', e.target.value)}
-                      className="w-32"
-                    />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeKV('deductions', i)}>
-                      <Trash2 className="h-4 w-4 text-muted-foreground" />
-                    </Button>
+                  <div key={i}>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        placeholder="Label (e.g. providentFund)"
+                        value={row.key}
+                        onChange={e => setKV('deductions', i, 'key', e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="Amount"
+                        value={row.value}
+                        onChange={e => setKV('deductions', i, 'value', e.target.value)}
+                        className={`w-32 ${kvErrors[`deductions-${i}`] ? 'border-destructive' : ''}`}
+                      />
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeKV('deductions', i)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                    {kvErrors[`deductions-${i}`] && <p className="text-xs text-destructive mt-1">{kvErrors[`deductions-${i}`]}</p>}
                   </div>
                 ))}
               </div>
@@ -412,7 +452,7 @@ export default function PayrollPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
             <Button
               onClick={handleSave}
-              disabled={isSubmitting || !form.employeeId || !form.effectiveDate || !form.basicSalary}
+              disabled={isSubmitting || !isValid}
             >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save

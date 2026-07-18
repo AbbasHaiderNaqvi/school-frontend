@@ -41,6 +41,7 @@ import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { useAuth } from '@/contexts/auth-context'
 import { authService } from '@/lib/services/auth'
 import type { User } from '@/lib/types'
+import { emailError, hasNoErrors } from '@/lib/validation'
 import {
   Plus,
   Search,
@@ -93,6 +94,7 @@ export default function AccountsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -163,8 +165,25 @@ export default function AccountsPage() {
     return matchesSearch && matchesRole
   })
 
+  const validateNewUser = (): boolean => {
+    const errors: Record<string, string> = {}
+    const emailErr = emailError(newUser.email)
+    if (emailErr) errors.email = emailErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
+  const validateEditingUser = (): boolean => {
+    const errors: Record<string, string> = {}
+    const emailErr = emailError(editingUser?.email ?? '')
+    if (emailErr) errors.email = emailErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleCreateUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) return
+    if (!validateNewUser()) return
     setIsSubmitting(true)
 
     const createdUser: User = {
@@ -186,6 +205,7 @@ export default function AccountsPage() {
 
   const handleEditUser = async () => {
     if (!editingUser || !editingUser.name || !editingUser.email) return
+    if (!validateEditingUser()) return
     setIsSubmitting(true)
 
     setUsers(users.map(u => (u.id === editingUser.id ? editingUser : u)))
@@ -210,6 +230,7 @@ export default function AccountsPage() {
 
   const openEditDialog = (u: User) => {
     setEditingUser({ ...u })
+    setFieldErrors({})
     setIsEditOpen(true)
   }
 
@@ -226,7 +247,7 @@ export default function AccountsPage() {
         description="Manage staff, admin, and user accounts across the school"
         action={
           canManageAccounts ? (
-            <Button onClick={() => setIsCreateOpen(true)}>
+            <Button onClick={() => { setFieldErrors({}); setIsCreateOpen(true) }}>
               <Plus className="h-4 w-4 mr-2" />
               Add Account
             </Button>
@@ -402,7 +423,9 @@ export default function AccountsPage() {
                 type="email"
                 value={newUser.email}
                 onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                className={fieldErrors.email ? 'border-destructive' : ''}
               />
+              {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
@@ -468,7 +491,9 @@ export default function AccountsPage() {
                   type="email"
                   value={editingUser.email}
                   onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                  className={fieldErrors.email ? 'border-destructive' : ''}
                 />
+                {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-role">Role</Label>

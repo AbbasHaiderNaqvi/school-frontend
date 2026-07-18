@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/table'
 import { academicsService } from '@/lib/services/academics'
 import type { AcademicSection, AcademicClass } from '@/lib/services/academics'
+import { requiredError, numberError, hasNoErrors } from '@/lib/validation'
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, LayoutList } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
@@ -44,6 +46,7 @@ export default function SectionsPage() {
   const [editing, setEditing] = useState<AcademicSection | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [form, setForm] = useState({ classId: '', name: '', capacity: '', sortOrder: '' })
 
   const loadData = useCallback(async () => {
@@ -81,6 +84,7 @@ export default function SectionsPage() {
     setEditing(null)
     setForm({ classId: filterClass !== 'all' ? filterClass : '', name: '', capacity: '', sortOrder: '' })
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
@@ -93,11 +97,24 @@ export default function SectionsPage() {
       sortOrder: '',
     })
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const nameErr = requiredError(form.name, 'Section name')
+    if (nameErr) errors.name = nameErr
+    const capacityErr = numberError(form.capacity, { min: 0, label: 'Capacity' })
+    if (capacityErr) errors.capacity = capacityErr
+    const sortOrderErr = numberError(form.sortOrder, { min: 0, label: 'Sort order' })
+    if (sortOrderErr) errors.sortOrder = sortOrderErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleSave = async () => {
-    if (!form.classId || !form.name.trim()) return
+    if (!form.classId || !form.name.trim() || !validate()) return
     setIsSubmitting(true)
     setSubmitError('')
 
@@ -174,15 +191,18 @@ export default function SectionsPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={filterClass} onValueChange={setFilterClass}>
-              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Classes</SelectItem>
-                {classes.map(cls => (
-                  <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              value={filterClass}
+              onValueChange={setFilterClass}
+              options={[
+                { value: 'all', label: 'All Classes' },
+                ...classes.map(cls => ({ value: cls.id, label: cls.name })),
+              ]}
+              placeholder="All Classes"
+              searchPlaceholder="Search classes…"
+              emptyText="No classes found."
+              className="w-[180px]"
+            />
             <Select value={filterActive} onValueChange={setFilterActive}>
               <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -294,14 +314,15 @@ export default function SectionsPage() {
             {!editing && (
               <div>
                 <Label>Class <span className="text-destructive">*</span></Label>
-                <Select value={form.classId} onValueChange={v => setForm(f => ({ ...f, classId: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select a class" /></SelectTrigger>
-                  <SelectContent>
-                    {classes.map(cls => (
-                      <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={form.classId}
+                  onValueChange={v => setForm(f => ({ ...f, classId: v }))}
+                  options={classes.map(cls => ({ value: cls.id, label: cls.name }))}
+                  placeholder="Select a class"
+                  searchPlaceholder="Search classes…"
+                  emptyText="No classes found."
+                  className="mt-1"
+                />
               </div>
             )}
             <div>
@@ -310,28 +331,33 @@ export default function SectionsPage() {
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Section A"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.name ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.name && <p className="text-xs text-destructive mt-1">{fieldErrors.name}</p>}
             </div>
             <div>
               <Label>Capacity (optional)</Label>
               <Input
                 type="number"
+                min={0}
                 value={form.capacity}
                 onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))}
                 placeholder="e.g. 30"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.capacity ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.capacity && <p className="text-xs text-destructive mt-1">{fieldErrors.capacity}</p>}
             </div>
             <div>
               <Label>Sort Order (optional)</Label>
               <Input
                 type="number"
+                min={0}
                 value={form.sortOrder}
                 onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))}
                 placeholder="1"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.sortOrder ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.sortOrder && <p className="text-xs text-destructive mt-1">{fieldErrors.sortOrder}</p>}
             </div>
           </div>
           <DialogFooter>

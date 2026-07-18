@@ -16,12 +16,14 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
 import type { FinanceTransaction, TransactionType, GlAccount } from '@/lib/services/finance'
 import { Plus, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Loader2, RefreshCw } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+import { numberError, hasNoErrors } from '@/lib/validation'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -49,6 +51,7 @@ export default function TransactionFlowPage() {
   const [showDialog, setShowDialog] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState({
     type: 'INCOME' as TransactionType,
     amount: '',
@@ -85,11 +88,20 @@ export default function TransactionFlowPage() {
       toAccountId: '',
     })
     setSubmitError('')
+    setFieldErrors({})
     setShowDialog(true)
   }
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const amountErr = numberError(formData.amount, { required: true, min: 0, label: 'Amount' })
+    if (amountErr) errors.amount = amountErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleSave = async () => {
-    if (!formData.description || !formData.amount) return
+    if (!formData.description || !formData.amount || !validate()) return
     setIsSubmitting(true)
     setSubmitError('')
     const result = await financeService.createTransaction({
@@ -239,7 +251,15 @@ export default function TransactionFlowPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Amount</Label>
-                <Input type="number" placeholder="0.00" value={formData.amount} onChange={e => setFormData(f => ({ ...f, amount: e.target.value }))} className="mt-1" />
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="0.00"
+                  value={formData.amount}
+                  onChange={e => setFormData(f => ({ ...f, amount: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.amount ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.amount && <p className="text-xs text-destructive mt-1">{fieldErrors.amount}</p>}
               </div>
               <div>
                 <Label>Date</Label>
@@ -253,48 +273,58 @@ export default function TransactionFlowPage() {
             {formData.type !== 'TRANSFER' && (
               <div>
                 <Label>Category Account (optional)</Label>
-                <Select value={formData.categoryAccountId} onValueChange={v => setFormData(f => ({ ...f, categoryAccountId: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select GL account" /></SelectTrigger>
-                  <SelectContent>
-                    {glAccounts.filter(a => formData.type === 'INCOME' ? a.type === 'INCOME' : a.type === 'EXPENSE').map(a => (
-                      <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={formData.categoryAccountId}
+                  onValueChange={v => setFormData(f => ({ ...f, categoryAccountId: v }))}
+                  options={glAccounts
+                    .filter(a => formData.type === 'INCOME' ? a.type === 'INCOME' : a.type === 'EXPENSE')
+                    .map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                  placeholder="Select GL account"
+                  searchPlaceholder="Search accounts…"
+                  emptyText="No accounts found."
+                  className="mt-1"
+                />
               </div>
             )}
             {formData.type !== 'TRANSFER' && (
               <div>
                 <Label>Payment Account (optional)</Label>
-                <Select value={formData.paymentAccountId} onValueChange={v => setFormData(f => ({ ...f, paymentAccountId: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select payment account" /></SelectTrigger>
-                  <SelectContent>
-                    {glAccounts.filter(a => a.type === 'ASSET').map(a => (
-                      <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={formData.paymentAccountId}
+                  onValueChange={v => setFormData(f => ({ ...f, paymentAccountId: v }))}
+                  options={glAccounts.filter(a => a.type === 'ASSET').map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                  placeholder="Select payment account"
+                  searchPlaceholder="Search accounts…"
+                  emptyText="No accounts found."
+                  className="mt-1"
+                />
               </div>
             )}
             {formData.type === 'TRANSFER' && (
               <>
                 <div>
                   <Label>From Account</Label>
-                  <Select value={formData.fromAccountId} onValueChange={v => setFormData(f => ({ ...f, fromAccountId: v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Source account" /></SelectTrigger>
-                    <SelectContent>
-                      {glAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    value={formData.fromAccountId}
+                    onValueChange={v => setFormData(f => ({ ...f, fromAccountId: v }))}
+                    options={glAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                    placeholder="Source account"
+                    searchPlaceholder="Search accounts…"
+                    emptyText="No accounts found."
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <Label>To Account</Label>
-                  <Select value={formData.toAccountId} onValueChange={v => setFormData(f => ({ ...f, toAccountId: v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Destination account" /></SelectTrigger>
-                    <SelectContent>
-                      {glAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    value={formData.toAccountId}
+                    onValueChange={v => setFormData(f => ({ ...f, toAccountId: v }))}
+                    options={glAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                    placeholder="Destination account"
+                    searchPlaceholder="Search accounts…"
+                    emptyText="No accounts found."
+                    className="mt-1"
+                  />
                 </div>
               </>
             )}

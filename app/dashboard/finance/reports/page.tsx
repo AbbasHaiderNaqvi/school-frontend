@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { ReportView } from '@/components/reports/report-view'
 import { Loader2, RefreshCw, Scale, BookText, FileStack, TrendingUp, Landmark } from 'lucide-react'
 
@@ -155,14 +155,14 @@ export default function FinanceReportsPage() {
             <CardContent className="pt-6 flex flex-wrap items-end gap-4">
               <div className="space-y-1.5 min-w-[220px]">
                 <Label htmlFor="ledger-account">GL Account</Label>
-                <Select value={ledgerAccountId} onValueChange={setLedgerAccountId}>
-                  <SelectTrigger id="ledger-account"><SelectValue placeholder="Select an account..." /></SelectTrigger>
-                  <SelectContent>
-                    {glAccounts.map(a => (
-                      <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={ledgerAccountId}
+                  onValueChange={setLedgerAccountId}
+                  options={glAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                  placeholder="Select an account..."
+                  searchPlaceholder="Search accounts…"
+                  emptyText="No accounts found."
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ledger-from">From</Label>

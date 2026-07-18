@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/table'
 import { hrService } from '@/lib/services/hr'
 import type { Department } from '@/lib/services/hr'
+import { requiredError, numberError, hasNoErrors } from '@/lib/validation'
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Building2 } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
@@ -38,6 +39,7 @@ export default function DepartmentsPage() {
   const [editing, setEditing] = useState<Department | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [form, setForm] = useState(EMPTY_FORM)
 
   const [deleteConfirm, setDeleteConfirm] = useState<Department | null>(null)
@@ -65,6 +67,7 @@ export default function DepartmentsPage() {
     setEditing(null)
     setForm(EMPTY_FORM)
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
@@ -78,11 +81,26 @@ export default function DepartmentsPage() {
       sortOrder: dept.sort_order != null ? String(dept.sort_order) : '',
     })
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
+  const isValid = form.name.trim() && form.code.trim()
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const nameErr = requiredError(form.name, 'Department name')
+    if (nameErr) errors.name = nameErr
+    const codeErr = requiredError(form.code, 'Code')
+    if (codeErr) errors.code = codeErr
+    const sortOrderErr = numberError(form.sortOrder, { min: 0, label: 'Sort order' })
+    if (sortOrderErr) errors.sortOrder = sortOrderErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleSave = async () => {
-    if (!form.name.trim() || !form.code.trim()) return
+    if (!isValid || !validate()) return
     setIsSubmitting(true)
     setSubmitError('')
 
@@ -239,8 +257,9 @@ export default function DepartmentsPage() {
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Mathematics Department"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.name ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.name && <p className="text-xs text-destructive mt-1">{fieldErrors.name}</p>}
             </div>
             <div>
               <Label>Code <span className="text-destructive">*</span></Label>
@@ -248,8 +267,9 @@ export default function DepartmentsPage() {
                 value={form.code}
                 onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
                 placeholder="e.g. MATH"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.code ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.code && <p className="text-xs text-destructive mt-1">{fieldErrors.code}</p>}
             </div>
             <div>
               <Label>Description (optional)</Label>
@@ -273,16 +293,18 @@ export default function DepartmentsPage() {
               <Label>Sort Order (optional)</Label>
               <Input
                 type="number"
+                min={0}
                 value={form.sortOrder}
                 onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))}
                 placeholder="0"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.sortOrder ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.sortOrder && <p className="text-xs text-destructive mt-1">{fieldErrors.sortOrder}</p>}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSubmitting || !form.name.trim() || !form.code.trim()}>
+            <Button onClick={handleSave} disabled={isSubmitting || !isValid}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editing ? 'Save Changes' : 'Create Department'}
             </Button>

@@ -25,6 +25,7 @@ import { usersService } from '@/lib/services/users'
 import type { UserDropdownItem } from '@/lib/services/users'
 import { feeService } from '@/lib/services/fee'
 import type { FeeInvoice, PaymentMethod } from '@/lib/services/fee'
+import { numberError, hasNoErrors } from '@/lib/validation'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -59,6 +60,7 @@ export default function FeeCounterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -88,16 +90,21 @@ export default function FeeCounterPage() {
       referenceNo: '',
     })
     setSubmitError('')
+    setFieldErrors({})
     setShowPaymentDialog(true)
+  }
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const amountErr = numberError(paymentData.amount, { required: true, min: 0.01, label: 'Payment amount' })
+    if (amountErr) errors.amount = amountErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
   }
 
   const handleSubmitPayment = async () => {
     if (!selectedInvoice) return
-    const amount = parseFloat(paymentData.amount)
-    if (isNaN(amount) || amount <= 0) {
-      setSubmitError('Please enter a valid amount')
-      return
-    }
+    if (!validate()) return
     setIsSubmitting(true)
     setSubmitError('')
     const result = await feeService.recordPayment({
@@ -258,9 +265,10 @@ export default function FeeCounterPage() {
                 placeholder="0.00"
                 value={paymentData.amount}
                 onChange={e => setPaymentData(d => ({ ...d, amount: e.target.value }))}
-                className="mt-1"
-                min="0"
+                className={`mt-1 ${fieldErrors.amount ? 'border-destructive' : ''}`}
+                min={0}
               />
+              {fieldErrors.amount && <p className="text-xs text-destructive mt-1">{fieldErrors.amount}</p>}
             </div>
             <div>
               <Label>Payment Method</Label>

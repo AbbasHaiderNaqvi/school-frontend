@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Attendance, AttendanceSummary, Employee } from '@/lib/types'
 import { Calendar, UserCheck, UserX, Clock } from 'lucide-react'
 import { TablePageSkeleton } from '@/components/ui/page-skeleton'
@@ -120,18 +121,14 @@ export default function AttendancePage() {
             </div>
             <div className="flex-1">
               <label className="text-sm font-medium mb-2 block">Employee</label>
-              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map(emp => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      {emp.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={selectedEmployee}
+                onValueChange={setSelectedEmployee}
+                options={employees.map(emp => ({ value: emp.id, label: emp.name }))}
+                placeholder="Select employee"
+                searchPlaceholder="Search employees…"
+                emptyText="No employees found."
+              />
             </div>
           </div>
 

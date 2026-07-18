@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -25,6 +26,7 @@ import {
 } from '@/components/ui/table'
 import { hrService } from '@/lib/services/hr'
 import type { Employee, Department, Designation, EmploymentType, EmployeeStatus, Gender } from '@/lib/services/hr'
+import { emailError, phoneError, hasNoErrors } from '@/lib/validation'
 import {
   Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Users,
   Link2, ImageIcon, UserCheck, ChevronDown,
@@ -73,6 +75,7 @@ export default function EmployeesPage() {
   const [editing, setEditing] = useState<Employee | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [form, setForm] = useState(EMPTY_FORM)
 
   const [deleteConfirm, setDeleteConfirm] = useState<Employee | null>(null)
@@ -128,6 +131,7 @@ export default function EmployeesPage() {
     setEditing(null)
     setForm(EMPTY_FORM)
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
@@ -157,11 +161,26 @@ export default function EmployeesPage() {
       notes: emp.notes ?? '',
     })
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
+  const isValid = form.firstName.trim() && form.lastName.trim() && form.email.trim()
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const emailErr = emailError(form.email)
+    if (emailErr) errors.email = emailErr
+    const phoneErr = phoneError(form.phone, false)
+    if (phoneErr) errors.phone = phoneErr
+    const emergencyPhoneErr = phoneError(form.emergencyContactPhone, false)
+    if (emergencyPhoneErr) errors.emergencyContactPhone = emergencyPhoneErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleSave = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) return
+    if (!isValid || !validate()) return
     setIsSubmitting(true)
     setSubmitError('')
 
@@ -451,11 +470,22 @@ export default function EmployeesPage() {
                 </div>
                 <div>
                   <Label>Email <span className="text-destructive">*</span></Label>
-                  <Input {...field('email')} type="email" placeholder="email@example.com" className="mt-1" />
+                  <Input
+                    {...field('email')}
+                    type="email"
+                    placeholder="email@example.com"
+                    className={`mt-1 ${fieldErrors.email ? 'border-destructive' : ''}`}
+                  />
+                  {fieldErrors.email && <p className="text-xs text-destructive mt-1">{fieldErrors.email}</p>}
                 </div>
                 <div>
                   <Label>Phone</Label>
-                  <Input {...field('phone')} placeholder="+92 300 0000000" className="mt-1" />
+                  <Input
+                    {...field('phone')}
+                    placeholder="+92 300 0000000"
+                    className={`mt-1 ${fieldErrors.phone ? 'border-destructive' : ''}`}
+                  />
+                  {fieldErrors.phone && <p className="text-xs text-destructive mt-1">{fieldErrors.phone}</p>}
                 </div>
                 <div>
                   <Label>Gender</Label>
@@ -491,23 +521,27 @@ export default function EmployeesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Department</Label>
-                  <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v, designationId: '' }))}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select department" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— Select —</SelectItem>
-                      {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    value={form.departmentId}
+                    onValueChange={v => setForm(f => ({ ...f, departmentId: v, designationId: '' }))}
+                    options={departments.map(d => ({ value: d.id, label: d.name, keywords: d.code }))}
+                    placeholder="Select department"
+                    searchPlaceholder="Search departments…"
+                    emptyText="No departments found."
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <Label>Designation</Label>
-                  <Select value={form.designationId || 'none'} onValueChange={v => setForm(f => ({ ...f, designationId: v === 'none' ? '' : v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select designation" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— Select —</SelectItem>
-                      {filteredDesignations.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    value={form.designationId}
+                    onValueChange={v => setForm(f => ({ ...f, designationId: v }))}
+                    options={filteredDesignations.map(d => ({ value: d.id, label: d.name, keywords: d.code }))}
+                    placeholder="Select designation"
+                    searchPlaceholder="Search designations…"
+                    emptyText="No designations found."
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <Label>Employment Type</Label>
@@ -543,7 +577,12 @@ export default function EmployeesPage() {
                 </div>
                 <div>
                   <Label>Contact Phone</Label>
-                  <Input {...field('emergencyContactPhone')} placeholder="Phone number" className="mt-1" />
+                  <Input
+                    {...field('emergencyContactPhone')}
+                    placeholder="Phone number"
+                    className={`mt-1 ${fieldErrors.emergencyContactPhone ? 'border-destructive' : ''}`}
+                  />
+                  {fieldErrors.emergencyContactPhone && <p className="text-xs text-destructive mt-1">{fieldErrors.emergencyContactPhone}</p>}
                 </div>
                 <div>
                   <Label>Relation</Label>
@@ -574,7 +613,7 @@ export default function EmployeesPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
             <Button
               onClick={handleSave}
-              disabled={isSubmitting || !form.firstName.trim() || !form.lastName.trim() || !form.email.trim()}
+              disabled={isSubmitting || !isValid}
             >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editing ? 'Save Changes' : 'Create Employee'}

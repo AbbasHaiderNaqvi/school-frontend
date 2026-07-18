@@ -1,837 +1,366 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
-import { parentService, studentService } from '@/lib/services'
-import type { Parent, Student } from '@/lib/types'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { PageHeader } from '@/components/layout/page-header'
+import { AccessDenied } from '@/components/ui/access-denied'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Switch } from '@/components/ui/switch'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Plus,
-  Search,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  Users,
-  Phone,
-  Mail,
-  MapPin,
-  Eye,
-  Key,
-  KeyRound,
-  UserCheck,
-  UserX,
-  LogIn,
-  Link as LinkIcon,
-  Unlink,
-  Briefcase,
-} from 'lucide-react'
-import { formatDate, formatDateTime, getInitials } from '@/lib/utils'
-import { StatsTablePageSkeleton } from '@/components/ui/page-skeleton'
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
+import { Switch } from '@/components/ui/switch'
+import { ParentFormDialog } from '@/components/parents/parent-form-dialog'
+import { parentService, type Parent, type LinkedStudent } from '@/lib/services/parent'
+import { studentService, type StudentDropdownItem } from '@/lib/services/student'
+import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Users, Eye, UserPlus } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+
+const RELATIONSHIPS = ['father', 'mother', 'guardian']
 
 export default function ParentsPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
+
   const [parents, setParents] = useState<Parent[]>([])
-  const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterLoginAccess, setFilterLoginAccess] = useState<string>('all')
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [isViewOpen, setIsViewOpen] = useState(false)
-  const [isLinkStudentOpen, setIsLinkStudentOpen] = useState(false)
-  const [selectedParent, setSelectedParent] = useState<Parent | null>(null)
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('')
-  const [stats, setStats] = useState({
-    total: 0,
-    withLogin: 0,
-    withoutLogin: 0,
-    activeLastWeek: 0,
-    multipleChildren: 0,
-  })
-  
-  const [newParent, setNewParent] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    alternatePhone: '',
-    occupation: '',
-    address: '',
-    relation: 'father' as Parent['relation'],
-    canLogin: false,
-  })
+  const [total, setTotal] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [search, setSearch] = useState('')
 
-  const tenantId = user?.tenantId || 'tenant_1'
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<Parent | null>(null)
 
-  useEffect(() => {
-    loadData()
-  }, [tenantId])
+  const [viewing, setViewing] = useState<Parent | null>(null)
+  const [isViewLoading, setIsViewLoading] = useState(false)
+  const [linkedStudents, setLinkedStudents] = useState<LinkedStudent[]>([])
+  const [studentsDropdown, setStudentsDropdown] = useState<StudentDropdownItem[]>([])
 
-  const loadData = async () => {
-    setLoading(true)
-    const [parentsData, studentsData, statsData] = await Promise.all([
-      parentService.getParents(tenantId),
-      studentService.getStudents(tenantId),
-      parentService.getParentStats(tenantId),
-    ])
-    setParents(parentsData)
-    setStudents(studentsData)
-    setStats(statsData)
-    setLoading(false)
-  }
+  const [linkStudentId, setLinkStudentId] = useState('')
+  const [linkRelationship, setLinkRelationship] = useState('father')
+  const [linkIsPrimary, setLinkIsPrimary] = useState(false)
+  const [isLinking, setIsLinking] = useState(false)
+  const [linkError, setLinkError] = useState('')
 
-  const handleCreateParent = async () => {
-    if (!newParent.name || !newParent.email || !newParent.phone) return
+  const [deleteTarget, setDeleteTarget] = useState<Parent | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
-    await parentService.createParent({
-      ...newParent,
-      tenantId,
-      studentIds: [],
-      isActive: true,
-      userId: newParent.canLogin ? `parent_user_${Date.now()}` : undefined,
-    })
-
-    setNewParent({
-      name: '',
-      email: '',
-      phone: '',
-      alternatePhone: '',
-      occupation: '',
-      address: '',
-      relation: 'father',
-      canLogin: false,
-    })
-    setIsCreateOpen(false)
-    loadData()
-  }
-
-  const handleToggleLoginAccess = async (parentId: string) => {
-    await parentService.toggleLoginAccess(parentId)
-    loadData()
-    
-    if (selectedParent?.id === parentId) {
-      const updated = await parentService.getParent(parentId)
-      setSelectedParent(updated)
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError('')
+    try {
+      const result = await parentService.getParents({ limit: 100, search: search || undefined })
+      setParents(result.data)
+      setTotal(result.total)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load parents.')
+    } finally {
+      setIsLoading(false)
     }
+  }, [search])
+
+  useEffect(() => { loadData() }, [loadData])
+
+  if (!can('parents.parent.read')) return <AccessDenied />
+
+  const openCreate = () => {
+    setEditing(null)
+    setDialogOpen(true)
+  }
+
+  const openEdit = (parent: Parent) => {
+    setEditing(parent)
+    setDialogOpen(true)
+  }
+
+  const openView = async (parent: Parent) => {
+    setViewing(parent)
+    setIsViewLoading(true)
+    setLinkError('')
+    setLinkStudentId('')
+    setLinkRelationship('father')
+    setLinkIsPrimary(false)
+    const [full, students, dropdown] = await Promise.all([
+      parentService.getParent(parent.id),
+      parentService.getLinkedStudents(parent.id).catch(() => []),
+      studentsDropdown.length > 0 ? Promise.resolve(studentsDropdown) : studentService.getStudentsDropdown(),
+    ])
+    if (full) setViewing(full)
+    setLinkedStudents(students)
+    setStudentsDropdown(dropdown)
+    setIsViewLoading(false)
+  }
+
+  const reloadLinkedStudents = async (parentId: string) => {
+    const students = await parentService.getLinkedStudents(parentId).catch(() => [])
+    setLinkedStudents(students)
   }
 
   const handleLinkStudent = async () => {
-    if (!selectedParent || !selectedStudentId) return
-    
-    await parentService.linkStudentToParent(selectedParent.id, selectedStudentId)
-    setIsLinkStudentOpen(false)
-    setSelectedStudentId('')
+    if (!viewing || !linkStudentId || !linkRelationship) return
+    setIsLinking(true)
+    setLinkError('')
+    const result = await parentService.linkStudent(viewing.id, {
+      studentId: linkStudentId,
+      relationship: linkRelationship,
+      isPrimary: linkIsPrimary,
+    })
+    setIsLinking(false)
+    if (result.error) { setLinkError(result.error); return }
+    setLinkStudentId('')
+    setLinkIsPrimary(false)
+    await reloadLinkedStudents(viewing.id)
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    setDeleteError('')
+    const { error } = await parentService.deleteParent(deleteTarget.id)
+    setIsDeleting(false)
+    if (error) { setDeleteError(error); return }
+    setDeleteTarget(null)
     loadData()
-    
-    const updated = await parentService.getParent(selectedParent.id)
-    setSelectedParent(updated)
-  }
-
-  const handleUnlinkStudent = async (studentId: string) => {
-    if (!selectedParent) return
-    
-    await parentService.unlinkStudentFromParent(selectedParent.id, studentId)
-    loadData()
-    
-    const updated = await parentService.getParent(selectedParent.id)
-    setSelectedParent(updated)
-  }
-
-  const handleDeleteParent = async (parentId: string) => {
-    if (confirm('Are you sure you want to delete this parent? This will unlink all associated students.')) {
-      await parentService.deleteParent(parentId)
-      setIsViewOpen(false)
-      setSelectedParent(null)
-      loadData()
-    }
-  }
-
-  const getParentStudents = (parent: Parent): Student[] => {
-    return students.filter(s => parent.studentIds.includes(s.id))
-  }
-
-  const getUnlinkedStudents = (): Student[] => {
-    const linkedStudentIds = new Set(parents.flatMap(p => p.studentIds))
-    return students.filter(s => !linkedStudentIds.has(s.id))
-  }
-
-  const filteredParents = parents.filter(parent => {
-    const matchesSearch = 
-      parent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      parent.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      parent.phone.includes(searchQuery)
-    const matchesLoginFilter = 
-      filterLoginAccess === 'all' ||
-      (filterLoginAccess === 'with' && parent.canLogin) ||
-      (filterLoginAccess === 'without' && !parent.canLogin)
-    return matchesSearch && matchesLoginFilter
-  })
-
-  if (loading) {
-    return <StatsTablePageSkeleton statCount={3} />
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Parent Management</h1>
-          <p className="text-muted-foreground">Manage parents/guardians and their portal access</p>
-        </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Parent
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Parents"
+        description="Guardian accounts linked to student profiles"
+        action={
+          can('parents.parent.create') && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button onClick={openCreate}>
+                <Plus className="mr-2 h-4 w-4" /> Add Parent
+              </Button>
+            </div>
+          )
+        }
+      />
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-                <p className="text-sm text-muted-foreground">Total Parents</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-500/10">
-                <UserCheck className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.withLogin}</p>
-                <p className="text-sm text-muted-foreground">With Portal Access</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-orange-500/10">
-                <UserX className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.withoutLogin}</p>
-                <p className="text-sm text-muted-foreground">No Portal Access</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <LogIn className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.activeLastWeek}</p>
-                <p className="text-sm text-muted-foreground">Active (7 days)</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-500/10">
-                <Users className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.multipleChildren}</p>
-                <p className="text-sm text-muted-foreground">Multiple Children</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search parents..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <Select value={filterLoginAccess} onValueChange={setFilterLoginAccess}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Portal Access" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Parents</SelectItem>
-                <SelectItem value="with">With Portal Access</SelectItem>
-                <SelectItem value="without">Without Portal Access</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Parents Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Parents ({filteredParents.length})</CardTitle>
+          <CardTitle>All Parents ({total})</CardTitle>
+          <div className="relative max-w-sm mt-3">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, or phone…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </CardHeader>
         <CardContent>
+          {loadError && (
+            <Alert variant="destructive" className="mb-4"><AlertDescription>{loadError}</AlertDescription></Alert>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Parent</TableHead>
-                <TableHead>Relation</TableHead>
-                <TableHead>Children</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Portal Access</TableHead>
-                <TableHead>Last Login</TableHead>
-                <TableHead className="w-12">Actions</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Occupation</TableHead>
+                <TableHead>Emergency Contact</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredParents.map((parent) => {
-                const children = getParentStudents(parent)
-                return (
-                  <TableRow key={parent.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarFallback className="bg-primary/10 text-primary">
-                            {getInitials(parent.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-foreground">{parent.name}</p>
-                          <p className="text-xs text-muted-foreground">{parent.occupation || 'N/A'}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="capitalize">{parent.relation}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {children.length > 0 ? (
-                          children.map(child => (
-                            <Badge key={child.id} variant="secondary" className="text-xs">
-                              {child.name.split(' ')[0]} ({child.className})
-                            </Badge>
-                          ))
-                        ) : (
-                          <span className="text-sm text-muted-foreground">No children linked</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <p className="text-sm flex items-center gap-1">
-                          <Phone className="h-3 w-3 text-muted-foreground" />
-                          {parent.phone}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{parent.email}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={parent.canLogin}
-                          onCheckedChange={() => handleToggleLoginAccess(parent.id)}
-                        />
-                        {parent.canLogin ? (
-                          <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">
-                            Enabled
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-200">
-                            Disabled
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {parent.lastLogin ? (
-                        <span className="text-sm text-muted-foreground">
-                          {formatDate(parent.lastLogin)}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Never</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedParent(parent)
-                            setIsViewOpen(true)
-                          }}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedParent(parent)
-                            setIsLinkStudentOpen(true)
-                          }}>
-                            <LinkIcon className="h-4 w-4 mr-2" />
-                            Link Student
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleToggleLoginAccess(parent.id)}>
-                            {parent.canLogin ? (
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={6} />
+              ) : (
+                <>
+                  {parents.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                        <Users className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        No parents found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {parents.map(parent => (
+                    <TableRow key={parent.id}>
+                      <TableCell className="font-semibold">{parent.firstName} {parent.lastName}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{parent.email}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{parent.phone}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{parent.occupation ?? '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant={parent.isEmergencyContact ? 'default' : 'secondary'}>
+                          {parent.isEmergencyContact ? 'Yes' : 'No'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openView(parent)}>
+                              <Eye className="mr-2 h-4 w-4" /> View
+                            </DropdownMenuItem>
+                            {can('parents.parent.update') && (
+                              <DropdownMenuItem onClick={() => openEdit(parent)}>
+                                <Edit className="mr-2 h-4 w-4" /> Edit
+                              </DropdownMenuItem>
+                            )}
+                            {can('parents.parent.delete') && (
                               <>
-                                <KeyRound className="h-4 w-4 mr-2" />
-                                Disable Portal Access
-                              </>
-                            ) : (
-                              <>
-                                <Key className="h-4 w-4 mr-2" />
-                                Enable Portal Access
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => { setDeleteTarget(parent); setDeleteError('') }} className="text-destructive">
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
                               </>
                             )}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            className="text-destructive"
-                            onClick={() => handleDeleteParent(parent.id)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-              {filteredParents.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No parents found
-                  </TableCell>
-                </TableRow>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Create Parent Dialog */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add New Parent</DialogTitle>
-            <DialogDescription>Enter parent/guardian details</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Full Name *</Label>
-                <Input
-                  value={newParent.name}
-                  onChange={(e) => setNewParent({ ...newParent, name: e.target.value })}
-                  placeholder="Parent name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Relation *</Label>
-                <Select
-                  value={newParent.relation}
-                  onValueChange={(v) => setNewParent({ ...newParent, relation: v as Parent['relation'] })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="father">Father</SelectItem>
-                    <SelectItem value="mother">Mother</SelectItem>
-                    <SelectItem value="guardian">Guardian</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Email *</Label>
-                <Input
-                  type="email"
-                  value={newParent.email}
-                  onChange={(e) => setNewParent({ ...newParent, email: e.target.value })}
-                  placeholder="parent@email.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Phone *</Label>
-                <Input
-                  value={newParent.phone}
-                  onChange={(e) => setNewParent({ ...newParent, phone: e.target.value })}
-                  placeholder="Phone number"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Alternate Phone</Label>
-                <Input
-                  value={newParent.alternatePhone}
-                  onChange={(e) => setNewParent({ ...newParent, alternatePhone: e.target.value })}
-                  placeholder="Alternate phone"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Occupation</Label>
-                <Input
-                  value={newParent.occupation}
-                  onChange={(e) => setNewParent({ ...newParent, occupation: e.target.value })}
-                  placeholder="Occupation"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Input
-                value={newParent.address}
-                onChange={(e) => setNewParent({ ...newParent, address: e.target.value })}
-                placeholder="Full address"
-              />
-            </div>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">Portal Access</p>
-                <p className="text-sm text-muted-foreground">Allow parent to log in to the portal</p>
-              </div>
-              <Switch
-                checked={newParent.canLogin}
-                onCheckedChange={(v) => setNewParent({ ...newParent, canLogin: v })}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateParent}>
-              Add Parent
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ParentFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editing={editing}
+        onSaved={loadData}
+      />
 
-      {/* View Parent Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          {selectedParent && (
-            <>
-              <DialogHeader>
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    <AvatarFallback className="bg-primary/10 text-primary text-xl">
-                      {getInitials(selectedParent.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <DialogTitle className="text-xl">{selectedParent.name}</DialogTitle>
-                    <DialogDescription className="capitalize">
-                      {selectedParent.relation}
-                    </DialogDescription>
-                    <div className="flex items-center gap-2 mt-1">
-                      {selectedParent.canLogin ? (
-                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">
-                          Portal Access Enabled
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-200">
-                          Portal Access Disabled
-                        </Badge>
-                      )}
+      {/* View Dialog */}
+      <Dialog open={!!viewing} onOpenChange={open => !open && setViewing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{viewing?.firstName} {viewing?.lastName}</DialogTitle>
+            <DialogDescription>{viewing?.email} · {viewing?.phone}</DialogDescription>
+          </DialogHeader>
+          {isViewLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">CNIC</p>
+                  <p className="font-medium">{viewing?.cnic ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Occupation</p>
+                  <p className="font-medium">{viewing?.occupation ?? '—'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-muted-foreground">Address</p>
+                  <p className="font-medium">{viewing?.address ?? '—'}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-2">Linked Students</p>
+                {linkedStudents.length > 0 ? (
+                  <div className="space-y-2">
+                    {linkedStudents.map(child => (
+                      <div key={child.id} className="flex items-center justify-between border rounded-lg p-2 text-sm">
+                        <span>
+                          {child.firstName} {child.lastName}
+                          {child.admissionNumber && (
+                            <span className="ml-2 font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{child.admissionNumber}</span>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {child.relationship && <Badge variant="secondary" className="capitalize">{child.relationship}</Badge>}
+                          {child.isPrimary && <Badge>Primary</Badge>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No students linked yet.</p>
+                )}
+              </div>
+
+              {can('parents.parent.link_student') && (
+                <div className="rounded-lg border p-3 space-y-3">
+                  <p className="text-sm font-semibold flex items-center gap-2"><UserPlus className="h-4 w-4" /> Link a Student</p>
+                  {linkError && <Alert variant="destructive"><AlertDescription>{linkError}</AlertDescription></Alert>}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Student</p>
+                      <Combobox
+                        value={linkStudentId}
+                        onValueChange={setLinkStudentId}
+                        options={studentsDropdown
+                          .filter(s => !linkedStudents.some(ls => ls.id === s.id))
+                          .map(s => ({ value: s.id, label: s.admissionNumber ? `${s.name} (${s.admissionNumber})` : s.name }))}
+                        placeholder="Select student"
+                        searchPlaceholder="Search students…"
+                        emptyText="No students found."
+                      />
                     </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Relationship</p>
+                      <Select value={linkRelationship} onValueChange={setLinkRelationship}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {RELATIONSHIPS.map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={linkIsPrimary} onCheckedChange={setLinkIsPrimary} />
+                      <span className="text-sm">Primary guardian for this student</span>
+                    </div>
+                    <Button size="sm" onClick={handleLinkStudent} disabled={isLinking || !linkStudentId}>
+                      {isLinking && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Link Student
+                    </Button>
                   </div>
                 </div>
-              </DialogHeader>
-
-              <Tabs defaultValue="info" className="mt-4">
-                <TabsList>
-                  <TabsTrigger value="info">Information</TabsTrigger>
-                  <TabsTrigger value="children">
-                    Children
-                    <Badge variant="secondary" className="ml-2">
-                      {selectedParent.studentIds.length}
-                    </Badge>
-                  </TabsTrigger>
-                  <TabsTrigger value="account">Account</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="info" className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Email</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        {selectedParent.email}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Phone</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        {selectedParent.phone}
-                      </p>
-                    </div>
-                    {selectedParent.alternatePhone && (
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Alternate Phone</p>
-                        <p className="font-medium flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          {selectedParent.alternatePhone}
-                        </p>
-                      </div>
-                    )}
-                    {selectedParent.occupation && (
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground">Occupation</p>
-                        <p className="font-medium flex items-center gap-2">
-                          <Briefcase className="h-4 w-4 text-muted-foreground" />
-                          {selectedParent.occupation}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  {selectedParent.address && (
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Address</p>
-                      <p className="font-medium flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        {selectedParent.address}
-                      </p>
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="children" className="space-y-4 mt-4">
-                  {/* Linked Children */}
-                  {getParentStudents(selectedParent).length > 0 ? (
-                    <div className="space-y-2">
-                      {getParentStudents(selectedParent).map(student => (
-                        <Card key={student.id}>
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-10 w-10">
-                                  <AvatarFallback className="bg-blue-500/10 text-blue-600">
-                                    {getInitials(student.name)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-medium">{student.name}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {student.className} | Roll: {student.rollNumber}
-                                  </p>
-                                </div>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleUnlinkStudent(student.id)}
-                              >
-                                <Unlink className="h-4 w-4 mr-1" />
-                                Unlink
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 text-muted-foreground">
-                      No children linked to this parent
-                    </div>
-                  )}
-                  
-                  <Button 
-                    variant="outline" 
-                    className="w-full bg-transparent"
-                    onClick={() => setIsLinkStudentOpen(true)}
-                  >
-                    <LinkIcon className="h-4 w-4 mr-2" />
-                    Link Another Student
-                  </Button>
-                </TabsContent>
-
-                <TabsContent value="account" className="space-y-4 mt-4">
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">Portal Access</p>
-                          <p className="text-sm text-muted-foreground">
-                            Allow parent to log in to the parent portal
-                          </p>
-                        </div>
-                        <Switch
-                          checked={selectedParent.canLogin}
-                          onCheckedChange={() => handleToggleLoginAccess(selectedParent.id)}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {selectedParent.canLogin && (
-                    <Card>
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium">Account Status</p>
-                          <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">
-                            Active
-                          </Badge>
-                        </div>
-                        <div className="text-sm space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">User ID</span>
-                            <span className="font-mono">{selectedParent.userId || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Last Login</span>
-                            <span>
-                              {selectedParent.lastLogin 
-                                ? formatDateTime(selectedParent.lastLogin) 
-                                : 'Never'}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="pt-2 border-t">
-                          <Button variant="outline" size="sm" className="w-full bg-transparent">
-                            <Key className="h-4 w-4 mr-2" />
-                            Reset Password
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </>
+              )}
+            </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Link Student Dialog */}
-      <Dialog open={isLinkStudentOpen} onOpenChange={setIsLinkStudentOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Link Student</DialogTitle>
-            <DialogDescription>
-              Select a student to link to {selectedParent?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Select Student</Label>
-              <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a student..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {students
-                    .filter(s => !selectedParent?.studentIds.includes(s.id))
-                    .map(s => (
-                      <SelectItem key={s.id} value={s.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{s.name}</span>
-                          <span className="text-muted-foreground text-xs">
-                            ({s.className} - {s.rollNumber})
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedStudentId && (
-              <Card>
-                <CardContent className="p-3">
-                  {(() => {
-                    const student = students.find(s => s.id === selectedStudentId)
-                    if (!student) return null
-                    return (
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarFallback>{getInitials(student.name)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{student.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {student.className} | Roll: {student.rollNumber}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsLinkStudentOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleLinkStudent} disabled={!selectedStudentId}>
-              Link Student
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTarget?.firstName} {deleteTarget?.lastName}"?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError && <Alert variant="destructive"><AlertDescription>{deleteError}</AlertDescription></Alert>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-white hover:bg-destructive/90">
+              {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

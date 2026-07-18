@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -23,6 +24,7 @@ import { financeService } from '@/lib/services/finance'
 import type { FinanceTransaction, TransactionType, TransactionStatus, GlAccount } from '@/lib/services/finance'
 import { Search, TrendingDown, TrendingUp, DollarSign, AlertCircle, Loader2, Plus, RefreshCw } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+import { numberError, hasNoErrors } from '@/lib/validation'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -72,6 +74,7 @@ export default function AllTransactionsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createError, setCreateError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [form, setForm] = useState(EMPTY_FORM)
 
   const loadData = useCallback(async () => {
@@ -97,6 +100,7 @@ export default function AllTransactionsPage() {
   const openCreate = async () => {
     setForm(EMPTY_FORM)
     setCreateError('')
+    setFieldErrors({})
     setIsCreateOpen(true)
     if (allAccounts.length === 0) {
       try {
@@ -108,8 +112,16 @@ export default function AllTransactionsPage() {
     }
   }
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const amountErr = numberError(form.amount, { required: true, min: 0, label: 'Amount' })
+    if (amountErr) errors.amount = amountErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleCreate = async () => {
-    if (!form.description || !form.amount || !form.date) return
+    if (!form.description || !form.amount || !form.date || !validate()) return
     setIsSubmitting(true)
     setCreateError('')
 
@@ -351,7 +363,15 @@ export default function AllTransactionsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Amount</Label>
-                <Input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" className="mt-1" />
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.amount}
+                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="0.00"
+                  className={`mt-1 ${fieldErrors.amount ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.amount && <p className="text-xs text-destructive mt-1">{fieldErrors.amount}</p>}
               </div>
               <div>
                 <Label>Date</Label>
@@ -370,23 +390,27 @@ export default function AllTransactionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Category Account (optional)</Label>
-                  <Select value={form.categoryAccountId} onValueChange={v => setForm(f => ({ ...f, categoryAccountId: v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select account" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {categoryAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    value={form.categoryAccountId}
+                    onValueChange={v => setForm(f => ({ ...f, categoryAccountId: v }))}
+                    options={categoryAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                    placeholder="Select account"
+                    searchPlaceholder="Search accounts…"
+                    emptyText="No accounts found."
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <Label>Payment Account (optional)</Label>
-                  <Select value={form.paymentAccountId} onValueChange={v => setForm(f => ({ ...f, paymentAccountId: v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Cash / bank" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {assetAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    value={form.paymentAccountId}
+                    onValueChange={v => setForm(f => ({ ...f, paymentAccountId: v }))}
+                    options={assetAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                    placeholder="Cash / bank"
+                    searchPlaceholder="Search accounts…"
+                    emptyText="No accounts found."
+                    className="mt-1"
+                  />
                 </div>
               </div>
             )}
@@ -397,23 +421,27 @@ export default function AllTransactionsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>From Account</Label>
-                    <Select value={form.fromAccountId} onValueChange={v => setForm(f => ({ ...f, fromAccountId: v }))}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="Source account" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {allAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Combobox
+                      value={form.fromAccountId}
+                      onValueChange={v => setForm(f => ({ ...f, fromAccountId: v }))}
+                      options={allAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                      placeholder="Source account"
+                      searchPlaceholder="Search accounts…"
+                      emptyText="No accounts found."
+                      className="mt-1"
+                    />
                   </div>
                   <div>
                     <Label>To Account</Label>
-                    <Select value={form.toAccountId} onValueChange={v => setForm(f => ({ ...f, toAccountId: v }))}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="Destination account" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {allAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Combobox
+                      value={form.toAccountId}
+                      onValueChange={v => setForm(f => ({ ...f, toAccountId: v }))}
+                      options={allAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                      placeholder="Destination account"
+                      searchPlaceholder="Search accounts…"
+                      emptyText="No accounts found."
+                      className="mt-1"
+                    />
                   </div>
                 </div>
                 <div>

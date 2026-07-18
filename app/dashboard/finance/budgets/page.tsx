@@ -10,9 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -23,6 +21,7 @@ import { financeService } from '@/lib/services/finance'
 import type { Budget, GlAccount } from '@/lib/services/finance'
 import { Plus, Search, Loader2, Wallet } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+import { numberError, requiredError, hasNoErrors } from '@/lib/validation'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -39,6 +38,7 @@ export default function BudgetsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createError, setCreateError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [newBudget, setNewBudget] = useState({
     name: '',
     glAccountId: '',
@@ -66,8 +66,25 @@ export default function BudgetsPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const nameErr = requiredError(newBudget.name, 'Budget name')
+    if (nameErr) errors.name = nameErr
+    const glAccountErr = requiredError(newBudget.glAccountId, 'GL account')
+    if (glAccountErr) errors.glAccountId = glAccountErr
+    const amountErr = numberError(newBudget.allocatedAmount, { required: true, min: 0, label: 'Allocated amount' })
+    if (amountErr) errors.allocatedAmount = amountErr
+    const startDateErr = requiredError(newBudget.startDate, 'Start date')
+    if (startDateErr) errors.startDate = startDateErr
+    const endDateErr = requiredError(newBudget.endDate, 'End date')
+    if (endDateErr) errors.endDate = endDateErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleCreate = async () => {
     if (!newBudget.name || !newBudget.glAccountId || !newBudget.allocatedAmount || !newBudget.startDate || !newBudget.endDate) return
+    if (!validate()) return
     setIsSubmitting(true)
     setCreateError('')
     const result = await financeService.createBudget({
@@ -103,7 +120,7 @@ export default function BudgetsPage() {
         description="Create and monitor budgets by GL account"
         action={
           can('finance.budget.create') ? (
-            <Button onClick={() => { setCreateError(''); setIsCreateOpen(true) }}>
+            <Button onClick={() => { setCreateError(''); setFieldErrors({}); setIsCreateOpen(true) }}>
               <Plus className="h-4 w-4 mr-2" /> New Budget
             </Button>
           ) : undefined
@@ -196,29 +213,59 @@ export default function BudgetsPage() {
           <div className="space-y-4 py-2">
             <div>
               <Label>Budget Name</Label>
-              <Input value={newBudget.name} onChange={e => setNewBudget(f => ({ ...f, name: e.target.value }))} placeholder="e.g., Salaries 2025" className="mt-1" />
+              <Input
+                value={newBudget.name}
+                onChange={e => setNewBudget(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g., Salaries 2025"
+                className={`mt-1 ${fieldErrors.name ? 'border-destructive' : ''}`}
+              />
+              {fieldErrors.name && <p className="text-xs text-destructive mt-1">{fieldErrors.name}</p>}
             </div>
             <div>
               <Label>GL Account (Expense)</Label>
-              <Select value={newBudget.glAccountId} onValueChange={v => setNewBudget(f => ({ ...f, glAccountId: v }))}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select expense account" /></SelectTrigger>
-                <SelectContent>
-                  {glAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={newBudget.glAccountId}
+                onValueChange={v => setNewBudget(f => ({ ...f, glAccountId: v }))}
+                options={glAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                placeholder="Select expense account"
+                searchPlaceholder="Search accounts…"
+                emptyText="No accounts found."
+                className={`mt-1 ${fieldErrors.glAccountId ? 'border-destructive' : ''}`}
+              />
+              {fieldErrors.glAccountId && <p className="text-xs text-destructive mt-1">{fieldErrors.glAccountId}</p>}
             </div>
             <div>
               <Label>Allocated Amount</Label>
-              <Input type="number" value={newBudget.allocatedAmount} onChange={e => setNewBudget(f => ({ ...f, allocatedAmount: e.target.value }))} placeholder="0.00" className="mt-1" />
+              <Input
+                type="number"
+                min={0}
+                value={newBudget.allocatedAmount}
+                onChange={e => setNewBudget(f => ({ ...f, allocatedAmount: e.target.value }))}
+                placeholder="0.00"
+                className={`mt-1 ${fieldErrors.allocatedAmount ? 'border-destructive' : ''}`}
+              />
+              {fieldErrors.allocatedAmount && <p className="text-xs text-destructive mt-1">{fieldErrors.allocatedAmount}</p>}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Start Date</Label>
-                <Input type="date" value={newBudget.startDate} onChange={e => setNewBudget(f => ({ ...f, startDate: e.target.value }))} className="mt-1" />
+                <Input
+                  type="date"
+                  value={newBudget.startDate}
+                  onChange={e => setNewBudget(f => ({ ...f, startDate: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.startDate ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.startDate && <p className="text-xs text-destructive mt-1">{fieldErrors.startDate}</p>}
               </div>
               <div>
                 <Label>End Date</Label>
-                <Input type="date" value={newBudget.endDate} onChange={e => setNewBudget(f => ({ ...f, endDate: e.target.value }))} className="mt-1" />
+                <Input
+                  type="date"
+                  value={newBudget.endDate}
+                  onChange={e => setNewBudget(f => ({ ...f, endDate: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.endDate ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.endDate && <p className="text-xs text-destructive mt-1">{fieldErrors.endDate}</p>}
               </div>
             </div>
           </div>

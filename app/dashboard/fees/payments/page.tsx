@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -22,6 +23,7 @@ import { AccessDenied } from '@/components/ui/access-denied'
 import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 import { feeService } from '@/lib/services/fee'
 import type { FeePayment, FeeInvoice, PaymentMethod } from '@/lib/services/fee'
+import { numberError, requiredError, hasNoErrors } from '@/lib/validation'
 import {
   Plus, Search, CreditCard, Banknote, Building2, Globe, Receipt,
   DollarSign, Smartphone, Loader2,
@@ -66,7 +68,7 @@ export default function PaymentsPage() {
   const [referenceNo, setReferenceNo] = useState('')
   const [saveError, setSaveError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [invoiceSearch, setInvoiceSearch] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const loadPayments = useCallback(async () => {
     setIsLoading(true)
@@ -85,12 +87,12 @@ export default function PaymentsPage() {
 
   const openRecordDialog = async () => {
     setSaveError('')
+    setFieldErrors({})
     setSelectedInvoiceId('')
     setPaymentAmount('')
     setPaymentMethod('CASH')
     setPaymentDate(new Date().toISOString().split('T')[0])
     setReferenceNo('')
-    setInvoiceSearch('')
 
     const result = await feeService.getInvoices({ limit: 100 })
     setOpenInvoices(result.data.filter(i => i.status === 'ISSUED' || i.status === 'PARTIAL' || i.status === 'OVERDUE'))
@@ -105,8 +107,19 @@ export default function PaymentsPage() {
     if (inv) setPaymentAmount(inv.balanceAmount)
   }
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const invoiceErr = requiredError(selectedInvoiceId, 'Invoice')
+    if (invoiceErr) errors.selectedInvoiceId = invoiceErr
+    const amountErr = numberError(paymentAmount, { required: true, min: 0.01, label: 'Payment amount' })
+    if (amountErr) errors.paymentAmount = amountErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleRecordPayment = async () => {
     if (!selectedInvoiceId || !paymentAmount) return
+    if (!validate()) return
     setIsSaving(true)
     setSaveError('')
     const result = await feeService.recordPayment({
@@ -130,14 +143,6 @@ export default function PaymentsPage() {
     if (!searchQuery) return true
     return p.referenceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.paymentDate.includes(searchQuery)
-  })
-
-  const filteredInvoices = openInvoices.filter(i => {
-    if (!invoiceSearch) return true
-    const q = invoiceSearch.toLowerCase()
-    return (i.studentName ?? '').toLowerCase().includes(q) ||
-      i.invoiceNo.toLowerCase().includes(q) ||
-      (i.className ?? '').toLowerCase().includes(q)
   })
 
   const totalCollected = payments.reduce((s, p) => s + parseFloat(p.amount), 0)
@@ -264,24 +269,21 @@ export default function PaymentsPage() {
           {saveError && <Alert variant="destructive"><AlertDescription>{saveError}</AlertDescription></Alert>}
           <div className="space-y-4 py-2">
             <div>
-              <Label>Search Invoice</Label>
-              <Input placeholder="Search by student, class, or invoice no…" value={invoiceSearch} onChange={e => setInvoiceSearch(e.target.value)} className="mt-1" />
-            </div>
-            <div>
               <Label>Select Invoice</Label>
-              <Select value={selectedInvoiceId} onValueChange={handleSelectInvoice}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select an invoice" /></SelectTrigger>
-                <SelectContent>
-                  {filteredInvoices.slice(0, 30).map(i => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.invoiceNo} — {i.studentName ?? 'Unknown'} — Balance: {money(i.balanceAmount)}
-                    </SelectItem>
-                  ))}
-                  {filteredInvoices.length === 0 && (
-                    <SelectItem value="__none" disabled>No open invoices found</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={selectedInvoiceId}
+                onValueChange={handleSelectInvoice}
+                options={openInvoices.map(i => ({
+                  value: i.id,
+                  label: `${i.invoiceNo} — ${i.studentName ?? 'Unknown'} — Balance: ${money(i.balanceAmount)}`,
+                  keywords: `${i.studentName ?? ''} ${i.className ?? ''}`,
+                }))}
+                placeholder="Select an invoice"
+                searchPlaceholder="Search by student, class, or invoice no…"
+                emptyText="No open invoices found."
+                className={`mt-1 ${fieldErrors.selectedInvoiceId ? 'border-destructive' : ''}`}
+              />
+              {fieldErrors.selectedInvoiceId && <p className="text-xs text-destructive mt-1">{fieldErrors.selectedInvoiceId}</p>}
             </div>
 
             {selectedInvoice && (
@@ -313,8 +315,15 @@ export default function PaymentsPage() {
               <Label>Payment Amount</Label>
               <div className="relative mt-1">
                 <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="pl-10" />
+                <Input
+                  type="number"
+                  min={0}
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  className={`pl-10 ${fieldErrors.paymentAmount ? 'border-destructive' : ''}`}
+                />
               </div>
+              {fieldErrors.paymentAmount && <p className="text-xs text-destructive mt-1">{fieldErrors.paymentAmount}</p>}
             </div>
             <div>
               <Label>Payment Method</Label>

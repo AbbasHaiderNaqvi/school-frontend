@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -389,12 +390,14 @@ export default function FeeStructuresPage() {
             {!editingStructure && (
               <div className="space-y-2">
                 <Label>Class</Label>
-                <Select value={formClassId} onValueChange={setFormClassId}>
-                  <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
-                  <SelectContent>
-                    {classes.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={formClassId}
+                  onValueChange={setFormClassId}
+                  options={classes.map(c => ({ value: c.id, label: c.name }))}
+                  placeholder="Select a class"
+                  searchPlaceholder="Search classes…"
+                  emptyText="No classes found."
+                />
               </div>
             )}
 
@@ -412,18 +415,20 @@ export default function FeeStructuresPage() {
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <Label>Fee Components</Label>
                 <div className="flex gap-2 flex-wrap">
-                  <Select value={catalogPick} onValueChange={handlePickFromCatalog} disabled={components.length === 0}>
-                    <SelectTrigger className="w-64">
-                      <SelectValue placeholder={components.length > 0 ? 'Add from catalog…' : 'No catalog components yet'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {components.filter(c => c.isActive).map(c => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} — {money(c.defaultAmount)} <span className="text-muted-foreground">· {c.type}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    value={catalogPick}
+                    onValueChange={handlePickFromCatalog}
+                    disabled={components.length === 0}
+                    options={components.filter(c => c.isActive).map(c => ({
+                      value: c.id,
+                      label: `${c.name} — ${money(c.defaultAmount)} · ${c.type}`,
+                      keywords: c.type,
+                    }))}
+                    placeholder={components.length > 0 ? 'Add from catalog…' : 'No catalog components yet'}
+                    searchPlaceholder="Search components…"
+                    emptyText="No components found."
+                    className="w-64"
+                  />
                   <Button variant="outline" size="sm" onClick={() => setShowQuickCreateComponent(true)}>
                     <Plus className="mr-1 h-3 w-3" /> New Component
                   </Button>

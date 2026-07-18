@@ -16,12 +16,14 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Loader2 } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { useAuth } from '@/contexts/auth-context'
 import { financeService } from '@/lib/services/finance'
 import type { FinanceTransaction, TransactionType, GlAccount } from '@/lib/services/finance'
+import { numberError, hasNoErrors } from '@/lib/validation'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -36,6 +38,7 @@ export default function CashierPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState({
     type: 'INCOME' as TransactionType,
     amount: '',
@@ -59,8 +62,16 @@ export default function CashierPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const amountErr = numberError(formData.amount, { required: true, min: 0, label: 'Amount' })
+    if (amountErr) errors.amount = amountErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleAddTransaction = async () => {
-    if (!formData.amount || !formData.description) return
+    if (!formData.amount || !formData.description || !validate()) return
     setIsSubmitting(true)
     setSubmitError('')
     const result = await financeService.createTransaction({
@@ -95,7 +106,7 @@ export default function CashierPage() {
           <h1 className="text-3xl font-bold">Cashier — Transaction Management</h1>
           <p className="text-muted-foreground">Record and manage cash transactions</p>
         </div>
-        <Button onClick={() => { setSubmitError(''); setIsDialogOpen(true) }}>
+        <Button onClick={() => { setSubmitError(''); setFieldErrors({}); setIsDialogOpen(true) }}>
           <Plus className="h-4 w-4 mr-2" /> Add Transaction
         </Button>
       </div>
@@ -178,7 +189,15 @@ export default function CashierPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Amount</Label>
-                <Input type="number" placeholder="0.00" value={formData.amount} onChange={e => setFormData(f => ({ ...f, amount: e.target.value }))} className="mt-1" />
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="0.00"
+                  value={formData.amount}
+                  onChange={e => setFormData(f => ({ ...f, amount: e.target.value }))}
+                  className={`mt-1 ${fieldErrors.amount ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.amount && <p className="text-xs text-destructive mt-1">{fieldErrors.amount}</p>}
               </div>
               <div>
                 <Label>Date</Label>
@@ -191,12 +210,15 @@ export default function CashierPage() {
             </div>
             <div>
               <Label>Payment Account (optional)</Label>
-              <Select value={formData.paymentAccountId} onValueChange={v => setFormData(f => ({ ...f, paymentAccountId: v }))}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Cash / Bank account" /></SelectTrigger>
-                <SelectContent>
-                  {glAccounts.filter(a => a.type === 'ASSET').map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={formData.paymentAccountId}
+                onValueChange={v => setFormData(f => ({ ...f, paymentAccountId: v }))}
+                options={glAccounts.filter(a => a.type === 'ASSET').map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                placeholder="Cash / Bank account"
+                searchPlaceholder="Search accounts…"
+                emptyText="No accounts found."
+                className="mt-1"
+              />
             </div>
           </div>
           <DialogFooter>

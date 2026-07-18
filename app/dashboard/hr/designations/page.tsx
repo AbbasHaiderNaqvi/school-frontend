@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/table'
 import { hrService } from '@/lib/services/hr'
 import type { Designation } from '@/lib/services/hr'
+import { requiredError, hasNoErrors } from '@/lib/validation'
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Award } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
@@ -39,6 +40,7 @@ export default function DesignationsPage() {
   const [editing, setEditing] = useState<Designation | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [form, setForm] = useState(EMPTY_FORM)
 
   const [deleteConfirm, setDeleteConfirm] = useState<Designation | null>(null)
@@ -66,6 +68,7 @@ export default function DesignationsPage() {
     setEditing(null)
     setForm(EMPTY_FORM)
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
@@ -78,11 +81,24 @@ export default function DesignationsPage() {
       level: desig.level ?? '',
     })
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
+  const isValid = form.name.trim() && form.code.trim()
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const nameErr = requiredError(form.name, 'Designation name')
+    if (nameErr) errors.name = nameErr
+    const codeErr = requiredError(form.code, 'Code')
+    if (codeErr) errors.code = codeErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleSave = async () => {
-    if (!form.name.trim() || !form.code.trim()) return
+    if (!isValid || !validate()) return
     setIsSubmitting(true)
     setSubmitError('')
 
@@ -238,8 +254,9 @@ export default function DesignationsPage() {
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Senior Teacher"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.name ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.name && <p className="text-xs text-destructive mt-1">{fieldErrors.name}</p>}
             </div>
             <div>
               <Label>Code <span className="text-destructive">*</span></Label>
@@ -247,8 +264,9 @@ export default function DesignationsPage() {
                 value={form.code}
                 onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
                 placeholder="e.g. SR-TCH"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.code ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.code && <p className="text-xs text-destructive mt-1">{fieldErrors.code}</p>}
             </div>
             <div>
               <Label>Level (optional)</Label>
@@ -271,7 +289,7 @@ export default function DesignationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSubmitting || !form.name.trim() || !form.code.trim()}>
+            <Button onClick={handleSave} disabled={isSubmitting || !isValid}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editing ? 'Save Changes' : 'Create Designation'}
             </Button>

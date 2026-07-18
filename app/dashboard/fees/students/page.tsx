@@ -7,9 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -21,7 +19,7 @@ import { feeService } from '@/lib/services/fee'
 import type { StudentFeeAssignment, StudentFeeDetail, FeeInvoice } from '@/lib/services/fee'
 import { academicsService } from '@/lib/services/academics'
 import type { AcademicClass } from '@/lib/services/academics'
-import { Search, Filter, Eye, Loader2 } from 'lucide-react'
+import { Search, Eye, Loader2 } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -112,18 +110,15 @@ export default function StudentFeesPage() {
                 className="pl-10"
               />
             </div>
-            <Select value={selectedClass} onValueChange={setSelectedClass}>
-              <SelectTrigger className="w-48">
-                <Filter className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="Filter by class" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Classes</SelectItem>
-                {classes.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              value={selectedClass}
+              onValueChange={setSelectedClass}
+              options={[{ value: 'all', label: 'All Classes' }, ...classes.map(c => ({ value: c.id, label: c.name }))]}
+              placeholder="Filter by class"
+              searchPlaceholder="Search classes…"
+              emptyText="No classes found."
+              className="w-48"
+            />
           </div>
         </CardContent>
       </Card>

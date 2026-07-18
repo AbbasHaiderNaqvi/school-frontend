@@ -16,6 +16,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertTriangle, Loader2, Save } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { numberError, hasNoErrors } from '@/lib/validation'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -31,6 +32,7 @@ export default function ThresholdManagementPage() {
   const [error, setError] = useState('')
   const [newThreshold, setNewThreshold] = useState('')
   const [newEnabled, setNewEnabled] = useState(true)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const canManageThreshold = user?.role === 'tenant_owner' || user?.role === 'tenant_admin' || user?.role === 'tenant_principal'
 
@@ -48,12 +50,16 @@ export default function ThresholdManagementPage() {
 
   useEffect(() => { loadSettings() }, [loadSettings])
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const thresholdErr = numberError(newThreshold, { required: newEnabled, min: 0, label: 'Threshold amount' })
+    if (thresholdErr) errors.threshold = thresholdErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleUpdate = async () => {
-    const val = parseFloat(newThreshold)
-    if (isNaN(val) || val < 0) {
-      setError('Please enter a valid threshold amount')
-      return
-    }
+    if (!validate()) return
     setIsUpdating(true)
     setError('')
     const ok = await financeService.updateExpenseApproval({ enabled: newEnabled, threshold: newThreshold })
@@ -118,7 +124,7 @@ export default function ThresholdManagementPage() {
                     : 'Expense approval workflow is currently disabled'}
                 </p>
               </div>
-              <Button onClick={() => setIsDialogOpen(true)}>
+              <Button onClick={() => { setFieldErrors({}); setError(''); setIsDialogOpen(true) }}>
                 <Save className="h-4 w-4 mr-2" /> Update Settings
               </Button>
             </div>
@@ -149,7 +155,15 @@ export default function ThresholdManagementPage() {
             {newEnabled && (
               <div>
                 <Label>Threshold Amount</Label>
-                <Input type="number" value={newThreshold} onChange={e => setNewThreshold(e.target.value)} placeholder="0.00" min="0" className="mt-1" />
+                <Input
+                  type="number"
+                  value={newThreshold}
+                  onChange={e => setNewThreshold(e.target.value)}
+                  placeholder="0.00"
+                  min={0}
+                  className={`mt-1 ${fieldErrors.threshold ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.threshold && <p className="text-xs text-destructive mt-1">{fieldErrors.threshold}</p>}
                 <p className="text-xs text-muted-foreground mt-1">Expenses above this amount will require approval</p>
               </div>
             )}

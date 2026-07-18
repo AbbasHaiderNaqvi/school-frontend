@@ -13,9 +13,8 @@ export type FeeStructureStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE'
 export type InvoiceStatus = 'ISSUED' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'VOID'
 export type PaymentMethod = 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'ONLINE_PAYMENT' | 'CHEQUE' | 'MOBILE_WALLET'
 export type PaymentStatus = 'COMPLETED' | 'REVERSED' | 'REFUNDED' | 'VOIDED'
-// FeeDiscount.type reuses FeeComponentType — confirmed by the create example
-// "type": "DISCOUNT", which only fits FeeComponentType's confirmed values, not
-// the old (unconfirmed, guessed) DiscountType union this used to be.
+// Confirmed distinct from FeeComponentType — /fees/discounts has its own type enum.
+export type DiscountType = 'SCHOLARSHIP' | 'DISCOUNT' | 'WAIVER' | 'SIBLING_DISCOUNT' | 'STAFF_DISCOUNT' | 'MERIT_BASED' | 'NEED_BASED'
 export type DiscountMode = 'PERCENTAGE' | 'FIXED'
 export type DiscountStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 
@@ -140,7 +139,7 @@ export interface FeeDiscount {
   invoiceId?: string
   studentFeeAssignmentId?: string
   academicYear: string
-  type: FeeComponentType
+  type: DiscountType
   discountMode: DiscountMode
   value: string
   resolvedAmount?: string
@@ -288,7 +287,7 @@ function normalizeFeeDiscount(raw: Record<string, unknown>): FeeDiscount {
     invoiceId: (raw.invoice_id ?? raw.invoiceId) as string | undefined,
     studentFeeAssignmentId: (raw.student_fee_assignment_id ?? raw.studentFeeAssignmentId) as string | undefined,
     academicYear: (raw.academic_year ?? raw.academicYear) as string,
-    type: raw.type as FeeComponentType,
+    type: raw.type as DiscountType,
     discountMode: (raw.discount_mode ?? raw.discountMode) as DiscountMode,
     value: raw.value as string,
     resolvedAmount: (raw.resolved_amount ?? raw.resolvedAmount) as string | undefined,
@@ -539,7 +538,7 @@ export const feeService = {
   },
 
   // ── Discounts ────────────────────────────────────────────────────────────────
-  async getDiscounts(params: { page?: number; limit?: number; studentId?: string; academicYear?: string; type?: FeeComponentType; status?: DiscountStatus } = {}): Promise<Paginated<FeeDiscount>> {
+  async getDiscounts(params: { page?: number; limit?: number; studentId?: string; invoiceId?: string; academicYear?: string; type?: DiscountType; status?: DiscountStatus } = {}): Promise<Paginated<FeeDiscount>> {
     const { data, error } = await api.get<unknown>(`/fees/discounts${buildQS(params)}`)
     if (error) throw new Error(error)
     const paginated = toPaginated<Record<string, unknown>>(data)
@@ -551,13 +550,19 @@ export const feeService = {
     return data ? normalizeFeeDiscount(data) : null
   },
 
-  async createDiscount(payload: { studentId: string; invoiceId?: string; studentFeeAssignmentId?: string; academicYear: string; type: FeeComponentType; discountMode: DiscountMode; value: string; reason: string }): Promise<{ discount: FeeDiscount | null; error?: string }> {
+  async createDiscount(payload: { studentId: string; invoiceId?: string; studentFeeAssignmentId?: string; academicYear: string; type: DiscountType; discountMode: DiscountMode; value: string; reason: string }): Promise<{ discount: FeeDiscount | null; error?: string }> {
     const { data, error } = await api.post<Record<string, unknown>>('/fees/discounts', payload)
     if (error || !data) return { discount: null, error: error || 'Failed to create discount' }
     return { discount: normalizeFeeDiscount(data) }
   },
 
-  async updateDiscount(id: string, payload: { academicYear?: string; type?: FeeComponentType; discountMode?: DiscountMode; value?: string; reason?: string }): Promise<FeeDiscount | null> {
+  async createDiscountsBulk(payload: { studentIds: string[]; academicYear: string; type: DiscountType; discountMode: DiscountMode; value: string; reason: string }): Promise<{ discounts: FeeDiscount[]; error?: string }> {
+    const { data, error } = await api.post<unknown>('/fees/discounts/bulk', payload)
+    if (error || !data) return { discounts: [], error: error || 'Failed to create discounts' }
+    return { discounts: toArray<Record<string, unknown>>(data).map(normalizeFeeDiscount) }
+  },
+
+  async updateDiscount(id: string, payload: { academicYear?: string; type?: DiscountType; discountMode?: DiscountMode; value?: string; reason?: string }): Promise<FeeDiscount | null> {
     const { data } = await api.patch<Record<string, unknown>>(`/fees/discounts/${id}`, payload)
     return data ? normalizeFeeDiscount(data) : null
   },

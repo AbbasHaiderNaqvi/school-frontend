@@ -36,6 +36,16 @@ import {
   BarChart3,
   BadgePercent,
   CalendarClock,
+  Tags,
+  MapPin,
+  Ruler,
+  Truck,
+  PackageMinus,
+  ArrowLeftRight,
+  Repeat,
+  ClipboardList,
+  Boxes,
+  ListChecks,
 } from 'lucide-react'
 import {
   Collapsible,
@@ -142,9 +152,31 @@ const navItems: NavItem[] = [
     children: [
       { title: 'Overview', href: '/dashboard/inventory', icon: LayoutDashboard },
       { title: 'Items', href: '/dashboard/inventory/items', icon: Package },
-      { title: 'Assets', href: '/dashboard/inventory/assets', icon: Package },
-      { title: 'Movements', href: '/dashboard/inventory/movements', icon: FileText },
+      { title: 'Categories', href: '/dashboard/inventory/categories', icon: Tags },
+      { title: 'Units', href: '/dashboard/inventory/units', icon: Ruler },
+      { title: 'Locations', href: '/dashboard/inventory/locations', icon: MapPin },
+      { title: 'Stock In (GRNs)', href: '/dashboard/inventory/grns', icon: Truck },
+      { title: 'Stock Out (Issues)', href: '/dashboard/inventory/issues', icon: PackageMinus },
+      { title: 'Transfers', href: '/dashboard/inventory/transfers', icon: ArrowLeftRight },
+      { title: 'Condition Changes', href: '/dashboard/inventory/condition-changes', icon: Repeat },
+      { title: 'Adjustments', href: '/dashboard/inventory/adjustments', icon: ClipboardList },
+      { title: 'Stock & Movements', href: '/dashboard/inventory/stock', icon: Boxes },
+      { title: 'Settings', href: '/dashboard/inventory/settings', icon: Settings },
     ],
+  },
+  {
+    title: 'Students',
+    href: '/dashboard/students',
+    icon: GraduationCap,
+    roles: ['tenant_admin', 'tenant_principal', 'tenant_accountant', 'hr', 'tenant_owner'],
+    featureFlag: 'academics_module',
+  },
+  {
+    title: 'Parents',
+    href: '/dashboard/parents',
+    icon: Users,
+    roles: ['tenant_admin', 'tenant_principal', 'tenant_accountant', 'hr', 'tenant_owner'],
+    featureFlag: 'academics_module',
   },
   {
     title: 'Academics',
@@ -154,6 +186,12 @@ const navItems: NavItem[] = [
     children: [
       { title: 'Classes', href: '/dashboard/academics/classes', icon: GraduationCap },
       { title: 'Sections', href: '/dashboard/academics/sections', icon: LayoutList },
+      {
+        title: 'Enrollments',
+        href: '/dashboard/academics/enrollments',
+        icon: ListChecks,
+        roles: ['tenant_admin', 'tenant_principal', 'tenant_accountant', 'tenant_cashier', 'teacher', 'tenant_owner'],
+      },
     ],
   },
   // {
@@ -297,7 +335,7 @@ function SidebarBody({ onLinkClick }: { onLinkClick?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-4 py-4">
+      <ScrollArea className="flex-1 min-h-0 px-4 py-4">
         <nav className="space-y-1">{filteredNavItems.map((item) => renderNavItem(item))}</nav>
       </ScrollArea>
 

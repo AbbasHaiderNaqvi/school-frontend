@@ -306,4 +306,10 @@ export const financeService = {
     const { error } = await api.post('/finance/periods/reopen', periodId ? { periodId } : {})
     return { success: !error, error: error ?? undefined }
   },
+
+  // Vendors
+  async getVendorsDropdown(): Promise<Array<{ id: string; name: string; code: string }>> {
+    const { data } = await api.get<Array<{ id: string; name: string; code: string }>>('/finance/vendors/dropdown')
+    return toArray(data)
+  },
 }

@@ -1,76 +1,80 @@
 'use client'
 
-import { CURRENCY_SYMBOL } from '@/lib/currency'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
+import { useAuth } from '@/contexts/auth-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { inventoryService } from '@/lib/services/inventory'
-import { useUser } from '@/lib/hooks/use-user'
-import { Package, TrendingDown, AlertCircle, DollarSign, Archive, Activity } from 'lucide-react'
+import {
+  Package, Tags, MapPin, Boxes, ClipboardList, Settings2, Truck, PackageMinus,
+} from 'lucide-react'
 import { TablePageSkeleton } from '@/components/ui/page-skeleton'
 
 export default function InventoryOverviewPage() {
-  const { user } = useUser()
+  const { can } = useAuth()
+
   const [stats, setStats] = useState({
     totalItems: 0,
-    totalValue: 0,
-    lowStock: 0,
-    outOfStock: 0,
-    totalAssets: 0,
-    recentMovements: 0,
+    totalCategories: 0,
+    totalLocations: 0,
+    stockBuckets: 0,
+    pendingAdjustments: 0,
+    glIntegrationEnabled: false,
   })
-  const [loading, setLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
-  useEffect(() => {
-    loadStats()
-  }, [user])
-
-  const loadStats = async () => {
-    if (!user?.tenantId) return
-
+  const loadStats = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError('')
     try {
-      setLoading(true)
-      const [items, assets, movements] = await Promise.all([
-        inventoryService.getInventoryItems(user.tenantId),
-        inventoryService.getAssets(user.tenantId),
-        inventoryService.getMovementHistory(user.tenantId),
+      const [items, categories, locations, stock, adjustments, settings] = await Promise.all([
+        inventoryService.getItems({ limit: 1 }),
+        inventoryService.getCategories({ limit: 1 }),
+        inventoryService.getLocations({ limit: 1 }),
+        inventoryService.getStock({ limit: 1 }),
+        can('inventory.adjustment.read') ? inventoryService.getAdjustments({ limit: 1, status: 'PENDING' }) : Promise.resolve({ data: [], total: 0, page: 1, limit: 1 }),
+        can('inventory.settings.read') ? inventoryService.getSettings() : Promise.resolve(null),
       ])
 
-      const lowStockItems = items.filter(i => i.quantity <= i.reorderLevel && i.quantity > 0)
-      const outOfStockItems = items.filter(i => i.quantity === 0)
-      const totalValue = items.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0)
-      const recentMovements = movements.filter(m => {
-        const movementDate = new Date(m.date)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        return movementDate >= thirtyDaysAgo
-      }).length
-
       setStats({
-        totalItems: items.length,
-        totalValue,
-        lowStock: lowStockItems.length,
-        outOfStock: outOfStockItems.length,
-        totalAssets: assets.length,
-        recentMovements,
+        totalItems: items.total,
+        totalCategories: categories.total,
+        totalLocations: locations.total,
+        stockBuckets: stock.total,
+        pendingAdjustments: adjustments.total,
+        glIntegrationEnabled: !!settings?.glIntegrationEnabled,
       })
-    } catch (error) {
-      console.error('[v0] Error loading inventory stats:', error)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to load inventory overview.')
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
-  }
+  }, [can])
 
-  if (loading) {
-    return <TablePageSkeleton />
-  }
+  useEffect(() => { loadStats() }, [loadStats])
+
+  if (isLoading) return <TablePageSkeleton />
+
+  const quickLinks = [
+    { href: '/dashboard/inventory/items', label: 'Manage Items', description: 'The item catalogue — add, edit, retire', icon: Package },
+    { href: '/dashboard/inventory/categories', label: 'Categories & Units', description: 'Organise items by category and unit of measure', icon: Tags },
+    { href: '/dashboard/inventory/locations', label: 'Storage Locations', description: 'Campus, building, room, cabinet, shelf, bin', icon: MapPin },
+    { href: '/dashboard/inventory/grns', label: 'Receive Stock', description: 'Record a vendor purchase, opening balance, or donation', icon: Truck },
+    { href: '/dashboard/inventory/issues', label: 'Issue Stock', description: 'Issue to a department, class, employee, or purpose', icon: PackageMinus },
+    { href: '/dashboard/inventory/stock', label: 'Find Stock', description: 'Search current stock by item, code, or location', icon: Boxes },
+  ]
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Inventory Overview</h1>
-        <p className="text-muted-foreground">Comprehensive view of inventory and assets</p>
+        <p className="text-muted-foreground">The school's physical stock, tracked down to the exact location it sits in</p>
       </div>
+
+      {loadError && <Alert variant="destructive"><AlertDescription>{loadError}</AlertDescription></Alert>}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
@@ -80,109 +84,85 @@ export default function InventoryOverviewPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalItems}</div>
-            <p className="text-xs text-muted-foreground">Inventory items tracked</p>
+            <p className="text-xs text-muted-foreground">Items in the catalogue</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Categories</CardTitle>
+            <Tags className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{CURRENCY_SYMBOL} {stats.totalValue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Current inventory value</p>
+            <div className="text-2xl font-bold">{stats.totalCategories}</div>
+            <p className="text-xs text-muted-foreground">Item categories defined</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
-            <TrendingDown className="h-4 w-4 text-yellow-600" />
+            <CardTitle className="text-sm font-medium">Storage Locations</CardTitle>
+            <MapPin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{stats.lowStock}</div>
-            <p className="text-xs text-muted-foreground">Items below reorder level</p>
+            <div className="text-2xl font-bold">{stats.totalLocations}</div>
+            <p className="text-xs text-muted-foreground">Nodes in the location tree</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-            <AlertCircle className="h-4 w-4 text-red-600" />
+            <CardTitle className="text-sm font-medium">Stock Buckets</CardTitle>
+            <Boxes className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.outOfStock}</div>
-            <p className="text-xs text-muted-foreground">Items out of stock</p>
+            <div className="text-2xl font-bold">{stats.stockBuckets}</div>
+            <p className="text-xs text-muted-foreground">Item × location × condition combinations with stock</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
-            <Archive className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Pending Adjustments</CardTitle>
+            <ClipboardList className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalAssets}</div>
-            <p className="text-xs text-muted-foreground">Fixed assets registered</p>
+            <div className="text-2xl font-bold text-yellow-600">{stats.pendingAdjustments}</div>
+            <p className="text-xs text-muted-foreground">Awaiting approval</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Recent Movements</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">GL Integration</CardTitle>
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.recentMovements}</div>
-            <p className="text-xs text-muted-foreground">Last 30 days</p>
+            <Badge variant={stats.glIntegrationEnabled ? 'default' : 'secondary'}>
+              {stats.glIntegrationEnabled ? 'Enabled' : 'Disabled'}
+            </Badge>
+            <p className="text-xs text-muted-foreground mt-1">Stock movements post to the ledger when on</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common inventory tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <a href="/dashboard/inventory/items" className="block p-3 rounded-lg hover:bg-accent transition-colors">
-              <div className="font-medium">Manage Items</div>
-              <div className="text-sm text-muted-foreground">View and update inventory items</div>
-            </a>
-            <a href="/dashboard/inventory/movements" className="block p-3 rounded-lg hover:bg-accent transition-colors">
-              <div className="font-medium">Record Movement</div>
-              <div className="text-sm text-muted-foreground">Add purchase, usage, or adjustment</div>
-            </a>
-            <a href="/dashboard/inventory/assets" className="block p-3 rounded-lg hover:bg-accent transition-colors">
-              <div className="font-medium">Manage Assets</div>
-              <div className="text-sm text-muted-foreground">View and track fixed assets</div>
-            </a>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Inventory Health</CardTitle>
-            <CardDescription>Status summary</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm">In Stock</span>
-              <Badge variant="default">{stats.totalItems - stats.outOfStock} items</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Low Stock</span>
-              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">{stats.lowStock} items</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Out of Stock</span>
-              <Badge variant="destructive">{stats.outOfStock} items</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+          <CardDescription>Common inventory tasks</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-2 sm:grid-cols-2">
+          {quickLinks.map(link => (
+            <Link key={link.href} href={link.href} className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors">
+              <link.icon className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium">{link.label}</div>
+                <div className="text-sm text-muted-foreground">{link.description}</div>
+              </div>
+            </Link>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   )
 }

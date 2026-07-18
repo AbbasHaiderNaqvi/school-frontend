@@ -3,10 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { money } from '@/lib/currency'
 import { useAuth } from '@/contexts/auth-context'
-import { feeService, type FeeDiscount, type FeeComponentType, type DiscountMode, type DiscountStatus } from '@/lib/services/fee'
-import { usersService, type UserListItem } from '@/lib/services/users'
-import { metadataService } from '@/lib/services/metadata'
-import { FALLBACK_COMPONENT_TYPES } from '@/components/fees/manage-fee-components-dialog'
+import { feeService, type FeeDiscount, type DiscountType, type DiscountMode, type DiscountStatus } from '@/lib/services/fee'
+import { studentService, type StudentDropdownItem } from '@/lib/services/student'
 import { PageHeader } from '@/components/layout/page-header'
 import { AccessDenied } from '@/components/ui/access-denied'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,12 +15,26 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
-import { Plus, Check, X, Edit, Trash2, Loader2, BadgePercent, Search } from 'lucide-react'
+import { numberError, requiredError, hasNoErrors } from '@/lib/validation'
+import { Plus, Check, X, Edit, Trash2, Loader2, BadgePercent, Users } from 'lucide-react'
 
 const ACADEMIC_YEARS = ['2024-2025', '2025-2026', '2026-2027']
+
+const DISCOUNT_TYPES: Array<{ value: DiscountType; label: string }> = [
+  { value: 'DISCOUNT', label: 'Discount' },
+  { value: 'SCHOLARSHIP', label: 'Scholarship' },
+  { value: 'WAIVER', label: 'Waiver' },
+  { value: 'SIBLING_DISCOUNT', label: 'Sibling Discount' },
+  { value: 'STAFF_DISCOUNT', label: 'Staff Discount' },
+  { value: 'MERIT_BASED', label: 'Merit Based' },
+  { value: 'NEED_BASED', label: 'Need Based' },
+]
+
+const ALL = '__all__'
 
 function statusBadgeVariant(status: DiscountStatus): 'default' | 'secondary' | 'destructive' {
   if (status === 'APPROVED') return 'default'
@@ -30,12 +42,16 @@ function statusBadgeVariant(status: DiscountStatus): 'default' | 'secondary' | '
   return 'secondary'
 }
 
+function studentLabel(s: StudentDropdownItem): string {
+  return s.admissionNumber ? `${s.name} (${s.admissionNumber})` : s.name
+}
+
 type FormState = {
   id: string | null
   studentId: string
   studentLabel: string
   academicYear: string
-  type: string
+  type: DiscountType
   discountMode: DiscountMode
   value: string
   reason: string
@@ -58,6 +74,26 @@ function blankForm(): FormState {
   }
 }
 
+type BulkFormState = {
+  studentIds: string[]
+  academicYear: string
+  type: DiscountType
+  discountMode: DiscountMode
+  value: string
+  reason: string
+}
+
+function blankBulkForm(): BulkFormState {
+  return {
+    studentIds: [],
+    academicYear: '2025-2026',
+    type: 'SIBLING_DISCOUNT',
+    discountMode: 'PERCENTAGE',
+    value: '',
+    reason: '',
+  }
+}
+
 export default function DiscountsPage() {
   const { can } = useAuth()
   // "Required permission: fees:discount:create" was given in colon form, but
@@ -69,18 +105,26 @@ export default function DiscountsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [statusFilter, setStatusFilter] = useState<DiscountStatus | 'all'>('all')
+  const [typeFilter, setTypeFilter] = useState<DiscountType | 'all'>('all')
+  const [studentFilter, setStudentFilter] = useState('')
 
-  const [typeOptions, setTypeOptions] = useState(FALLBACK_COMPONENT_TYPES)
+  const [studentsDropdown, setStudentsDropdown] = useState<StudentDropdownItem[]>([])
 
   const [showFormDialog, setShowFormDialog] = useState(false)
   const [form, setForm] = useState<FormState>(blankForm())
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  const [studentSearch, setStudentSearch] = useState('')
-  const [students, setStudents] = useState<UserListItem[]>([])
-  const [isLoadingStudents, setIsLoadingStudents] = useState(false)
   const [studentInvoices, setStudentInvoices] = useState<Array<{ id: string; invoiceNo: string; balanceAmount: string }>>([])
+
+  const [showBulkDialog, setShowBulkDialog] = useState(false)
+  const [bulkForm, setBulkForm] = useState<BulkFormState>(blankBulkForm())
+  const [bulkPickerId, setBulkPickerId] = useState('')
+  const [isBulkSaving, setIsBulkSaving] = useState(false)
+  const [bulkError, setBulkError] = useState('')
+  const [bulkFieldErrors, setBulkFieldErrors] = useState<Record<string, string>>({})
+  const [bulkResult, setBulkResult] = useState<number | null>(null)
 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
 
@@ -88,32 +132,26 @@ export default function DiscountsPage() {
     setIsLoading(true)
     setLoadError('')
     try {
-      const res = await feeService.getDiscounts({ limit: 100, status: statusFilter === 'all' ? undefined : statusFilter })
+      const res = await feeService.getDiscounts({
+        limit: 100,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        type: typeFilter === 'all' ? undefined : typeFilter,
+        studentId: studentFilter || undefined,
+      })
       setDiscounts(res.data)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load discounts. Please try again.')
     } finally {
       setIsLoading(false)
     }
-  }, [statusFilter])
+  }, [statusFilter, typeFilter, studentFilter])
 
   useEffect(() => { loadDiscounts() }, [loadDiscounts])
 
+  // Student profiles (never the users list) — per the dropdown-first rule.
   useEffect(() => {
-    metadataService.getFeeDropdowns().then(dropdowns => {
-      if (dropdowns?.discountTypes?.length) setTypeOptions(dropdowns.discountTypes)
-    })
+    studentService.getStudentsDropdown().then(setStudentsDropdown)
   }, [])
-
-  // Student search — only while creating (editing keeps the original student).
-  useEffect(() => {
-    if (!showFormDialog || form.id) return
-    setIsLoadingStudents(true)
-    usersService.list({ role: 'student', limit: 50, search: studentSearch || undefined }).then(res => {
-      setStudents(res.data)
-      setIsLoadingStudents(false)
-    })
-  }, [showFormDialog, form.id, studentSearch])
 
   // Once a student is picked, pull their invoices + current fee assignment.
   useEffect(() => {
@@ -126,8 +164,8 @@ export default function DiscountsPage() {
 
   const openCreate = () => {
     setForm(blankForm())
-    setStudentSearch('')
     setSaveError('')
+    setFieldErrors({})
     setShowFormDialog(true)
   }
 
@@ -145,23 +183,46 @@ export default function DiscountsPage() {
       studentFeeAssignmentId: d.studentFeeAssignmentId ?? '',
     })
     setSaveError('')
+    setFieldErrors({})
     setShowFormDialog(true)
   }
 
   const handleSelectStudent = (studentId: string) => {
-    const student = students.find(s => s.id === studentId)
-    setForm(f => ({ ...f, studentId, studentLabel: student?.fullName ?? studentId, invoiceId: '' }))
+    const student = studentsDropdown.find(s => s.id === studentId)
+    setForm(f => ({ ...f, studentId, studentLabel: student ? studentLabel(student) : studentId, invoiceId: '' }))
   }
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    if (!form.id) {
+      const studentErr = requiredError(form.studentId, 'Student')
+      if (studentErr) errors.studentId = studentErr
+    }
+    const isPercentage = form.discountMode === 'PERCENTAGE'
+    const valueErr = numberError(form.value, {
+      required: true,
+      min: 0,
+      max: isPercentage ? 100 : undefined,
+      label: isPercentage ? 'Percentage' : 'Amount',
+    })
+    if (valueErr) errors.value = valueErr
+    const reasonErr = requiredError(form.reason, 'Reason')
+    if (reasonErr) errors.reason = reasonErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
+  const isValid = !!form.value && !!form.reason && (!!form.id || !!form.studentId)
+
   const handleSave = async () => {
-    if (!form.value || !form.reason || (!form.id && !form.studentId)) return
+    if (!isValid || !validate()) return
     setIsSaving(true)
     setSaveError('')
 
     if (form.id) {
       const updated = await feeService.updateDiscount(form.id, {
         academicYear: form.academicYear,
-        type: form.type as FeeComponentType,
+        type: form.type,
         discountMode: form.discountMode,
         value: form.value,
         reason: form.reason,
@@ -173,7 +234,7 @@ export default function DiscountsPage() {
         invoiceId: form.invoiceId || undefined,
         studentFeeAssignmentId: form.studentFeeAssignmentId || undefined,
         academicYear: form.academicYear,
-        type: form.type as FeeComponentType,
+        type: form.type,
         discountMode: form.discountMode,
         value: form.value,
         reason: form.reason,
@@ -188,6 +249,66 @@ export default function DiscountsPage() {
     await loadDiscounts()
     setShowFormDialog(false)
     setIsSaving(false)
+  }
+
+  const openBulk = () => {
+    setBulkForm(blankBulkForm())
+    setBulkPickerId('')
+    setBulkError('')
+    setBulkFieldErrors({})
+    setBulkResult(null)
+    setShowBulkDialog(true)
+  }
+
+  const addBulkStudent = (studentId: string) => {
+    if (!studentId || bulkForm.studentIds.includes(studentId)) return
+    setBulkForm(f => ({ ...f, studentIds: [...f.studentIds, studentId] }))
+    setBulkPickerId('')
+  }
+
+  const removeBulkStudent = (studentId: string) => {
+    setBulkForm(f => ({ ...f, studentIds: f.studentIds.filter(id => id !== studentId) }))
+  }
+
+  const validateBulk = (): boolean => {
+    const errors: Record<string, string> = {}
+    if (bulkForm.studentIds.length === 0) errors.studentIds = 'Select at least one student.'
+    const isPercentage = bulkForm.discountMode === 'PERCENTAGE'
+    const valueErr = numberError(bulkForm.value, {
+      required: true,
+      min: 0,
+      max: isPercentage ? 100 : undefined,
+      label: isPercentage ? 'Percentage' : 'Amount',
+    })
+    if (valueErr) errors.value = valueErr
+    const reasonErr = requiredError(bulkForm.reason, 'Reason')
+    if (reasonErr) errors.reason = reasonErr
+    setBulkFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
+  const isBulkValid = bulkForm.studentIds.length > 0 && !!bulkForm.value && !!bulkForm.reason
+
+  const handleBulkSave = async () => {
+    if (!isBulkValid || !validateBulk()) return
+    setIsBulkSaving(true)
+    setBulkError('')
+    setBulkResult(null)
+
+    const result = await feeService.createDiscountsBulk({
+      studentIds: bulkForm.studentIds,
+      academicYear: bulkForm.academicYear,
+      type: bulkForm.type,
+      discountMode: bulkForm.discountMode,
+      value: bulkForm.value,
+      reason: bulkForm.reason,
+    })
+
+    setIsBulkSaving(false)
+    if (result.error) { setBulkError(result.error); return }
+
+    setBulkResult(result.discounts.length)
+    await loadDiscounts()
   }
 
   const handleApprove = async (d: FeeDiscount) => {
@@ -231,20 +352,45 @@ export default function DiscountsPage() {
       )}
 
       <div className="flex justify-between items-center gap-2 flex-wrap">
-        <Select value={statusFilter} onValueChange={v => setStatusFilter(v as DiscountStatus | 'all')}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="PENDING">Pending</SelectItem>
-            <SelectItem value="APPROVED">Approved</SelectItem>
-            <SelectItem value="REJECTED">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
-        {canDiscount('create') && (
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" /> New Discount
-          </Button>
-        )}
+        <div className="flex gap-2 flex-wrap items-center">
+          <Select value={statusFilter} onValueChange={v => setStatusFilter(v as DiscountStatus | 'all')}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="APPROVED">Approved</SelectItem>
+              <SelectItem value="REJECTED">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter} onValueChange={v => setTypeFilter(v as DiscountType | 'all')}>
+            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {DISCOUNT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Combobox
+            value={studentFilter}
+            onValueChange={setStudentFilter}
+            options={studentsDropdown.map(s => ({ value: s.id, label: studentLabel(s) }))}
+            placeholder="Filter by student"
+            searchPlaceholder="Search students…"
+            emptyText="No students found."
+            className="w-56"
+          />
+        </div>
+        <div className="flex gap-2">
+          {canDiscount('create') && (
+            <Button variant="outline" onClick={openBulk}>
+              <Users className="mr-2 h-4 w-4" /> Bulk Assign
+            </Button>
+          )}
+          {canDiscount('create') && (
+            <Button onClick={openCreate}>
+              <Plus className="mr-2 h-4 w-4" /> New Discount
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -311,6 +457,7 @@ export default function DiscountsPage() {
         </CardContent>
       </Card>
 
+      {/* Single create/edit dialog */}
       <Dialog open={showFormDialog} onOpenChange={setShowFormDialog}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -331,16 +478,16 @@ export default function DiscountsPage() {
             ) : (
               <div className="space-y-2">
                 <Label>Student</Label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input placeholder="Search students…" value={studentSearch} onChange={e => setStudentSearch(e.target.value)} className="pl-8" />
-                </div>
-                <Select value={form.studentId} onValueChange={handleSelectStudent}>
-                  <SelectTrigger><SelectValue placeholder={isLoadingStudents ? 'Searching…' : 'Select a student'} /></SelectTrigger>
-                  <SelectContent>
-                    {students.map(s => <SelectItem key={s.id} value={s.id}>{s.fullName} ({s.userCode})</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={form.studentId}
+                  onValueChange={handleSelectStudent}
+                  options={studentsDropdown.map(s => ({ value: s.id, label: studentLabel(s) }))}
+                  placeholder="Select a student"
+                  searchPlaceholder="Search students…"
+                  emptyText="No students found."
+                  className={fieldErrors.studentId ? 'border-destructive' : ''}
+                />
+                {fieldErrors.studentId && <p className="text-xs text-destructive mt-1">{fieldErrors.studentId}</p>}
               </div>
             )}
 
@@ -356,10 +503,10 @@ export default function DiscountsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Type</Label>
-                <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
+                <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as DiscountType }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {typeOptions.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    {DISCOUNT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -380,10 +527,14 @@ export default function DiscountsPage() {
                 <Label>Value {form.discountMode === 'PERCENTAGE' ? '(%)' : '(amount)'}</Label>
                 <Input
                   type="number"
+                  min={0}
+                  max={form.discountMode === 'PERCENTAGE' ? 100 : undefined}
                   value={form.value}
                   onChange={e => setForm(f => ({ ...f, value: e.target.value }))}
                   placeholder={form.discountMode === 'PERCENTAGE' ? 'e.g., 25' : 'e.g., 1000'}
+                  className={fieldErrors.value ? 'border-destructive' : ''}
                 />
+                {fieldErrors.value && <p className="text-xs text-destructive mt-1">{fieldErrors.value}</p>}
               </div>
             </div>
 
@@ -409,15 +560,132 @@ export default function DiscountsPage() {
                 value={form.reason}
                 onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
                 placeholder="e.g., Merit scholarship for top academic performance."
+                className={fieldErrors.reason ? 'border-destructive' : ''}
               />
+              {fieldErrors.reason && <p className="text-xs text-destructive mt-1">{fieldErrors.reason}</p>}
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFormDialog(false)} disabled={isSaving}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving || !form.value || !form.reason || (!form.id && !form.studentId)}>
+            <Button onClick={handleSave} disabled={isSaving || !isValid}>
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {form.id ? 'Save Changes' : 'Create Discount'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk assign dialog */}
+      <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bulk Assign Discount</DialogTitle>
+            <DialogDescription>Apply the same discount or scholarship to a group of students at once — e.g. a sibling discount for a whole family.</DialogDescription>
+          </DialogHeader>
+
+          {bulkError && <Alert variant="destructive"><AlertDescription>{bulkError}</AlertDescription></Alert>}
+          {bulkResult !== null && (
+            <Alert><AlertDescription>Created {bulkResult} discount{bulkResult === 1 ? '' : 's'}.</AlertDescription></Alert>
+          )}
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Students</Label>
+              <Combobox
+                value={bulkPickerId}
+                onValueChange={addBulkStudent}
+                options={studentsDropdown
+                  .filter(s => !bulkForm.studentIds.includes(s.id))
+                  .map(s => ({ value: s.id, label: studentLabel(s) }))}
+                placeholder="Add a student…"
+                searchPlaceholder="Search students…"
+                emptyText="No students found."
+                className={bulkFieldErrors.studentIds ? 'border-destructive' : ''}
+              />
+              {bulkFieldErrors.studentIds && <p className="text-xs text-destructive mt-1">{bulkFieldErrors.studentIds}</p>}
+              {bulkForm.studentIds.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {bulkForm.studentIds.map(id => {
+                    const s = studentsDropdown.find(x => x.id === id)
+                    return (
+                      <Badge key={id} variant="secondary" className="gap-1 pr-1">
+                        {s ? studentLabel(s) : id}
+                        <button type="button" onClick={() => removeBulkStudent(id)} className="ml-1 rounded-full hover:bg-muted-foreground/20">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Academic Year</Label>
+                <Select value={bulkForm.academicYear} onValueChange={v => setBulkForm(f => ({ ...f, academicYear: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ACADEMIC_YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={bulkForm.type} onValueChange={v => setBulkForm(f => ({ ...f, type: v as DiscountType }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DISCOUNT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Discount Mode</Label>
+                <Select value={bulkForm.discountMode} onValueChange={v => setBulkForm(f => ({ ...f, discountMode: v as DiscountMode }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PERCENTAGE">Percentage</SelectItem>
+                    <SelectItem value="FIXED">Fixed Amount</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Value {bulkForm.discountMode === 'PERCENTAGE' ? '(%)' : '(amount)'}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={bulkForm.discountMode === 'PERCENTAGE' ? 100 : undefined}
+                  value={bulkForm.value}
+                  onChange={e => setBulkForm(f => ({ ...f, value: e.target.value }))}
+                  placeholder={bulkForm.discountMode === 'PERCENTAGE' ? 'e.g., 25' : 'e.g., 1000'}
+                  className={bulkFieldErrors.value ? 'border-destructive' : ''}
+                />
+                {bulkFieldErrors.value && <p className="text-xs text-destructive mt-1">{bulkFieldErrors.value}</p>}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Reason</Label>
+              <Textarea
+                rows={3}
+                value={bulkForm.reason}
+                onChange={e => setBulkForm(f => ({ ...f, reason: e.target.value }))}
+                placeholder="e.g., Sibling discount for the 2025-2026 session."
+                className={bulkFieldErrors.reason ? 'border-destructive' : ''}
+              />
+              {bulkFieldErrors.reason && <p className="text-xs text-destructive mt-1">{bulkFieldErrors.reason}</p>}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDialog(false)} disabled={isBulkSaving}>Close</Button>
+            <Button onClick={handleBulkSave} disabled={isBulkSaving || !isBulkValid}>
+              {isBulkSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Assign to {bulkForm.studentIds.length || 0} Student{bulkForm.studentIds.length === 1 ? '' : 's'}
             </Button>
           </DialogFooter>
         </DialogContent>

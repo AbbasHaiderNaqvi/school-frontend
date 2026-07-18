@@ -22,6 +22,7 @@ import {
 import { AccessDenied } from '@/components/ui/access-denied'
 import { feeService } from '@/lib/services/fee'
 import type { FeeInvoice, InvoiceStatus, PaymentMethod } from '@/lib/services/fee'
+import { numberError, hasNoErrors } from '@/lib/validation'
 import { Search, CreditCard, Loader2 } from 'lucide-react'
 import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 
@@ -54,6 +55,7 @@ export default function InvoicesPage() {
   const [referenceNo, setReferenceNo] = useState('')
   const [paymentError, setPaymentError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const loadInvoices = useCallback(async () => {
     setIsLoading(true)
@@ -81,11 +83,21 @@ export default function InvoicesPage() {
     setPaymentDate(new Date().toISOString().split('T')[0])
     setReferenceNo('')
     setPaymentError('')
+    setFieldErrors({})
     setIsPaymentOpen(true)
+  }
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const amountErr = numberError(paymentAmount, { required: true, min: 0.01, label: 'Payment amount' })
+    if (amountErr) errors.paymentAmount = amountErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
   }
 
   const handleRecordPayment = async () => {
     if (!selectedInvoice || !paymentAmount) return
+    if (!validate()) return
     setIsSubmitting(true)
     setPaymentError('')
     const result = await feeService.recordPayment({
@@ -214,7 +226,14 @@ export default function InvoicesPage() {
               </div>
               <div>
                 <Label>Payment Amount</Label>
-                <Input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="mt-1" />
+                <Input
+                  type="number"
+                  min={0}
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  className={`mt-1 ${fieldErrors.paymentAmount ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.paymentAmount && <p className="text-xs text-destructive mt-1">{fieldErrors.paymentAmount}</p>}
               </div>
               <div>
                 <Label>Payment Method</Label>

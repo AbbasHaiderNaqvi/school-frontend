@@ -21,10 +21,12 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { requiredError, numberError, hasNoErrors } from '@/lib/validation'
 import {
   Plus, Check, X, Edit, Trash2, Loader2, CalendarDays, ListChecks, Wallet2, Ban,
 } from 'lucide-react'
@@ -79,12 +81,14 @@ export default function LeavesPage() {
   const [applyForm, setApplyForm] = useState({ employeeId: '', leaveTypeId: '', startDate: '', endDate: '', reason: '' })
   const [isApplying, setIsApplying] = useState(false)
   const [applyError, setApplyError] = useState('')
+  const [applyFieldErrors, setApplyFieldErrors] = useState<Record<string, string>>({})
   const [reviewingId, setReviewingId] = useState<string | null>(null)
 
   // ── Leave Types state ────────────────────────────────────────────────────────
   const [typeForm, setTypeForm] = useState<TypeFormState | null>(null)
   const [isSavingType, setIsSavingType] = useState(false)
   const [typeSaveError, setTypeSaveError] = useState('')
+  const [typeFieldErrors, setTypeFieldErrors] = useState<Record<string, string>>({})
   const [deletingTypeId, setDeletingTypeId] = useState<string | null>(null)
 
   // ── Balances state ───────────────────────────────────────────────────────────
@@ -97,6 +101,7 @@ export default function LeavesPage() {
   const [allocateForm, setAllocateForm] = useState({ leaveTypeId: '', year: '2025', days: '' })
   const [isAllocating, setIsAllocating] = useState(false)
   const [allocateError, setAllocateError] = useState('')
+  const [allocateFieldErrors, setAllocateFieldErrors] = useState<Record<string, string>>({})
 
   const loadBase = useCallback(async () => {
     setIsLoading(true)
@@ -139,11 +144,28 @@ export default function LeavesPage() {
   const openApply = () => {
     setApplyForm({ employeeId: user?.linkedId ?? '', leaveTypeId: '', startDate: '', endDate: '', reason: '' })
     setApplyError('')
+    setApplyFieldErrors({})
     setShowApplyDialog(true)
   }
 
+  const isApplyValid = !!applyForm.employeeId && !!applyForm.leaveTypeId && !!applyForm.startDate && !!applyForm.endDate
+
+  const validateApply = (): boolean => {
+    const errors: Record<string, string> = {}
+    const employeeErr = requiredError(applyForm.employeeId, 'Employee')
+    if (employeeErr) errors.employeeId = employeeErr
+    const leaveTypeErr = requiredError(applyForm.leaveTypeId, 'Leave type')
+    if (leaveTypeErr) errors.leaveTypeId = leaveTypeErr
+    const startDateErr = requiredError(applyForm.startDate, 'Start date')
+    if (startDateErr) errors.startDate = startDateErr
+    const endDateErr = requiredError(applyForm.endDate, 'End date')
+    if (endDateErr) errors.endDate = endDateErr
+    setApplyFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleApply = async () => {
-    if (!applyForm.employeeId || !applyForm.leaveTypeId || !applyForm.startDate || !applyForm.endDate) return
+    if (!isApplyValid || !validateApply()) return
     setIsApplying(true)
     setApplyError('')
     const result = await hrService.createLeaveApplication({
@@ -182,7 +204,7 @@ export default function LeavesPage() {
 
   // ── Leave Type actions ───────────────────────────────────────────────────────
 
-  const openCreateType = () => { setTypeForm(blankTypeForm()); setTypeSaveError('') }
+  const openCreateType = () => { setTypeForm(blankTypeForm()); setTypeSaveError(''); setTypeFieldErrors({}) }
   const openEditType = (t: LeaveType) => {
     setTypeForm({
       id: t.id,
@@ -195,10 +217,28 @@ export default function LeavesPage() {
       maxCarryForwardDays: String(t.maxCarryForwardDays),
     })
     setTypeSaveError('')
+    setTypeFieldErrors({})
+  }
+
+  const isTypeValid = !!typeForm && !!typeForm.name && !!typeForm.code && !!typeForm.totalDaysAllowed
+
+  const validateType = (): boolean => {
+    if (!typeForm) return false
+    const errors: Record<string, string> = {}
+    const nameErr = requiredError(typeForm.name, 'Name')
+    if (nameErr) errors.name = nameErr
+    const codeErr = requiredError(typeForm.code, 'Code')
+    if (codeErr) errors.code = codeErr
+    const totalDaysErr = numberError(typeForm.totalDaysAllowed, { required: true, min: 0, label: 'Total days allowed' })
+    if (totalDaysErr) errors.totalDaysAllowed = totalDaysErr
+    const maxCarryErr = numberError(typeForm.maxCarryForwardDays, { min: 0, label: 'Max carry forward days' })
+    if (maxCarryErr) errors.maxCarryForwardDays = maxCarryErr
+    setTypeFieldErrors(errors)
+    return hasNoErrors(errors)
   }
 
   const handleSaveType = async () => {
-    if (!typeForm || !typeForm.name || !typeForm.code || !typeForm.totalDaysAllowed) return
+    if (!isTypeValid || !validateType()) return
     setIsSavingType(true)
     setTypeSaveError('')
 
@@ -263,11 +303,24 @@ export default function LeavesPage() {
     if (!balanceEmployeeId) return
     setAllocateForm({ leaveTypeId: '', year: balanceYear, days: '' })
     setAllocateError('')
+    setAllocateFieldErrors({})
     setShowAllocateDialog(true)
   }
 
+  const isAllocateValid = !!balanceEmployeeId && !!allocateForm.leaveTypeId && !!allocateForm.year && !!allocateForm.days
+
+  const validateAllocate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const leaveTypeErr = requiredError(allocateForm.leaveTypeId, 'Leave type')
+    if (leaveTypeErr) errors.leaveTypeId = leaveTypeErr
+    const daysErr = numberError(allocateForm.days, { required: true, min: 0, label: 'Days' })
+    if (daysErr) errors.days = daysErr
+    setAllocateFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleAllocate = async () => {
-    if (!balanceEmployeeId || !allocateForm.leaveTypeId || !allocateForm.year || !allocateForm.days) return
+    if (!isAllocateValid || !validateAllocate()) return
     setIsAllocating(true)
     setAllocateError('')
     const result = await hrService.allocateLeaveType({
@@ -445,12 +498,14 @@ export default function LeavesPage() {
               <div className="flex items-end gap-4 flex-wrap">
                 <div className="space-y-1.5 min-w-[240px]">
                   <Label>Employee</Label>
-                  <Select value={balanceEmployeeId} onValueChange={setBalanceEmployeeId}>
-                    <SelectTrigger><SelectValue placeholder="Select an employee" /></SelectTrigger>
-                    <SelectContent>
-                      {employees.map(e => <SelectItem key={e.id} value={e.id}>{employeeLabel(e)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    value={balanceEmployeeId}
+                    onValueChange={setBalanceEmployeeId}
+                    options={employees.map(e => ({ value: e.id, label: employeeLabel(e), keywords: e.email }))}
+                    placeholder="Select an employee"
+                    searchPlaceholder="Search employees…"
+                    emptyText="No employees found."
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Year</Label>
@@ -526,30 +581,50 @@ export default function LeavesPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Employee</Label>
-              <Select value={applyForm.employeeId} onValueChange={v => setApplyForm(f => ({ ...f, employeeId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select an employee" /></SelectTrigger>
-                <SelectContent>
-                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{employeeLabel(e)}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={applyForm.employeeId}
+                onValueChange={v => setApplyForm(f => ({ ...f, employeeId: v }))}
+                options={employees.map(e => ({ value: e.id, label: employeeLabel(e), keywords: e.email }))}
+                placeholder="Select an employee"
+                searchPlaceholder="Search employees…"
+                emptyText="No employees found."
+                className={applyFieldErrors.employeeId ? 'border-destructive' : ''}
+              />
+              {applyFieldErrors.employeeId && <p className="text-xs text-destructive mt-1">{applyFieldErrors.employeeId}</p>}
             </div>
             <div className="space-y-2">
               <Label>Leave Type</Label>
-              <Select value={applyForm.leaveTypeId} onValueChange={v => setApplyForm(f => ({ ...f, leaveTypeId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select a leave type" /></SelectTrigger>
-                <SelectContent>
-                  {leaveTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.name} ({t.code})</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={applyForm.leaveTypeId}
+                onValueChange={v => setApplyForm(f => ({ ...f, leaveTypeId: v }))}
+                options={leaveTypes.map(t => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+                placeholder="Select a leave type"
+                searchPlaceholder="Search leave types…"
+                emptyText="No leave types found."
+                className={applyFieldErrors.leaveTypeId ? 'border-destructive' : ''}
+              />
+              {applyFieldErrors.leaveTypeId && <p className="text-xs text-destructive mt-1">{applyFieldErrors.leaveTypeId}</p>}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Start Date</Label>
-                <Input type="date" value={applyForm.startDate} onChange={e => setApplyForm(f => ({ ...f, startDate: e.target.value }))} />
+                <Input
+                  type="date"
+                  value={applyForm.startDate}
+                  onChange={e => setApplyForm(f => ({ ...f, startDate: e.target.value }))}
+                  className={applyFieldErrors.startDate ? 'border-destructive' : ''}
+                />
+                {applyFieldErrors.startDate && <p className="text-xs text-destructive mt-1">{applyFieldErrors.startDate}</p>}
               </div>
               <div className="space-y-2">
                 <Label>End Date</Label>
-                <Input type="date" value={applyForm.endDate} onChange={e => setApplyForm(f => ({ ...f, endDate: e.target.value }))} />
+                <Input
+                  type="date"
+                  value={applyForm.endDate}
+                  onChange={e => setApplyForm(f => ({ ...f, endDate: e.target.value }))}
+                  className={applyFieldErrors.endDate ? 'border-destructive' : ''}
+                />
+                {applyFieldErrors.endDate && <p className="text-xs text-destructive mt-1">{applyFieldErrors.endDate}</p>}
               </div>
             </div>
             <div className="space-y-2">
@@ -562,7 +637,7 @@ export default function LeavesPage() {
             <Button variant="outline" onClick={() => setShowApplyDialog(false)} disabled={isApplying}>Cancel</Button>
             <Button
               onClick={handleApply}
-              disabled={isApplying || !applyForm.employeeId || !applyForm.leaveTypeId || !applyForm.startDate || !applyForm.endDate}
+              disabled={isApplying || !isApplyValid}
             >
               {isApplying && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Submit Application
@@ -587,11 +662,23 @@ export default function LeavesPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Name</Label>
-                    <Input value={typeForm.name} onChange={e => setTypeForm(f => f && ({ ...f, name: e.target.value }))} placeholder="e.g., Annual Leave" />
+                    <Input
+                      value={typeForm.name}
+                      onChange={e => setTypeForm(f => f && ({ ...f, name: e.target.value }))}
+                      placeholder="e.g., Annual Leave"
+                      className={typeFieldErrors.name ? 'border-destructive' : ''}
+                    />
+                    {typeFieldErrors.name && <p className="text-xs text-destructive mt-1">{typeFieldErrors.name}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label>Code</Label>
-                    <Input value={typeForm.code} onChange={e => setTypeForm(f => f && ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="e.g., ANNUAL" />
+                    <Input
+                      value={typeForm.code}
+                      onChange={e => setTypeForm(f => f && ({ ...f, code: e.target.value.toUpperCase() }))}
+                      placeholder="e.g., ANNUAL"
+                      className={typeFieldErrors.code ? 'border-destructive' : ''}
+                    />
+                    {typeFieldErrors.code && <p className="text-xs text-destructive mt-1">{typeFieldErrors.code}</p>}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -601,16 +688,26 @@ export default function LeavesPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Total Days Allowed</Label>
-                    <Input type="number" value={typeForm.totalDaysAllowed} onChange={e => setTypeForm(f => f && ({ ...f, totalDaysAllowed: e.target.value }))} />
+                    <Input
+                      type="number"
+                      min={0}
+                      value={typeForm.totalDaysAllowed}
+                      onChange={e => setTypeForm(f => f && ({ ...f, totalDaysAllowed: e.target.value }))}
+                      className={typeFieldErrors.totalDaysAllowed ? 'border-destructive' : ''}
+                    />
+                    {typeFieldErrors.totalDaysAllowed && <p className="text-xs text-destructive mt-1">{typeFieldErrors.totalDaysAllowed}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label>Max Carry Forward Days</Label>
                     <Input
                       type="number"
+                      min={0}
                       value={typeForm.maxCarryForwardDays}
                       onChange={e => setTypeForm(f => f && ({ ...f, maxCarryForwardDays: e.target.value }))}
                       disabled={!typeForm.carryForward}
+                      className={typeFieldErrors.maxCarryForwardDays ? 'border-destructive' : ''}
                     />
+                    {typeFieldErrors.maxCarryForwardDays && <p className="text-xs text-destructive mt-1">{typeFieldErrors.maxCarryForwardDays}</p>}
                   </div>
                 </div>
                 <div className="flex items-center justify-between rounded-lg border p-3">
@@ -625,7 +722,7 @@ export default function LeavesPage() {
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setTypeForm(null)} disabled={isSavingType}>Cancel</Button>
-                <Button onClick={handleSaveType} disabled={isSavingType || !typeForm.name || !typeForm.code || !typeForm.totalDaysAllowed}>
+                <Button onClick={handleSaveType} disabled={isSavingType || !isTypeValid}>
                   {isSavingType && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   {typeForm.id ? 'Save Changes' : 'Create Leave Type'}
                 </Button>
@@ -648,12 +745,16 @@ export default function LeavesPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Leave Type</Label>
-              <Select value={allocateForm.leaveTypeId} onValueChange={v => setAllocateForm(f => ({ ...f, leaveTypeId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select a leave type" /></SelectTrigger>
-                <SelectContent>
-                  {leaveTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.name} ({t.code})</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={allocateForm.leaveTypeId}
+                onValueChange={v => setAllocateForm(f => ({ ...f, leaveTypeId: v }))}
+                options={leaveTypes.map(t => ({ value: t.id, label: `${t.name} (${t.code})` }))}
+                placeholder="Select a leave type"
+                searchPlaceholder="Search leave types…"
+                emptyText="No leave types found."
+                className={allocateFieldErrors.leaveTypeId ? 'border-destructive' : ''}
+              />
+              {allocateFieldErrors.leaveTypeId && <p className="text-xs text-destructive mt-1">{allocateFieldErrors.leaveTypeId}</p>}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -667,14 +768,22 @@ export default function LeavesPage() {
               </div>
               <div className="space-y-2">
                 <Label>Days</Label>
-                <Input type="number" value={allocateForm.days} onChange={e => setAllocateForm(f => ({ ...f, days: e.target.value }))} placeholder="e.g., 21" />
+                <Input
+                  type="number"
+                  min={0}
+                  value={allocateForm.days}
+                  onChange={e => setAllocateForm(f => ({ ...f, days: e.target.value }))}
+                  placeholder="e.g., 21"
+                  className={allocateFieldErrors.days ? 'border-destructive' : ''}
+                />
+                {allocateFieldErrors.days && <p className="text-xs text-destructive mt-1">{allocateFieldErrors.days}</p>}
               </div>
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAllocateDialog(false)} disabled={isAllocating}>Cancel</Button>
-            <Button onClick={handleAllocate} disabled={isAllocating || !allocateForm.leaveTypeId || !allocateForm.days}>
+            <Button onClick={handleAllocate} disabled={isAllocating || !isAllocateValid}>
               {isAllocating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Allocate
             </Button>

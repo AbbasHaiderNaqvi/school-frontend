@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table'
 import { academicsService } from '@/lib/services/academics'
 import type { AcademicClass } from '@/lib/services/academics'
+import { requiredError, numberError, hasNoErrors } from '@/lib/validation'
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, GraduationCap } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
@@ -42,6 +43,7 @@ export default function ClassesPage() {
   const [editing, setEditing] = useState<AcademicClass | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [form, setForm] = useState({ name: '', description: '', sortOrder: '' })
 
   const loadData = useCallback(async () => {
@@ -70,6 +72,7 @@ export default function ClassesPage() {
     setEditing(null)
     setForm({ name: '', description: '', sortOrder: '' })
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
@@ -77,11 +80,22 @@ export default function ClassesPage() {
     setEditing(cls)
     setForm({ name: cls.name, description: cls.description ?? '', sortOrder: String(cls.sortOrder ?? '') })
     setSubmitError('')
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const nameErr = requiredError(form.name, 'Class name')
+    if (nameErr) errors.name = nameErr
+    const sortOrderErr = numberError(form.sortOrder, { min: 0, label: 'Sort order' })
+    if (sortOrderErr) errors.sortOrder = sortOrderErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleSave = async () => {
-    if (!form.name.trim()) return
+    if (!form.name.trim() || !validate()) return
     setIsSubmitting(true)
     setSubmitError('')
 
@@ -269,8 +283,9 @@ export default function ClassesPage() {
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Grade 1"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.name ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.name && <p className="text-xs text-destructive mt-1">{fieldErrors.name}</p>}
             </div>
             <div>
               <Label>Description (optional)</Label>
@@ -285,11 +300,13 @@ export default function ClassesPage() {
               <Label>Sort Order (optional)</Label>
               <Input
                 type="number"
+                min={0}
                 value={form.sortOrder}
                 onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))}
                 placeholder="1"
-                className="mt-1"
+                className={`mt-1 ${fieldErrors.sortOrder ? 'border-destructive' : ''}`}
               />
+              {fieldErrors.sortOrder && <p className="text-xs text-destructive mt-1">{fieldErrors.sortOrder}</p>}
             </div>
           </div>
           <DialogFooter>

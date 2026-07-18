@@ -7,6 +7,7 @@ import { usersService } from '@/lib/services/users'
 import type { UserDropdownItem } from '@/lib/services/users'
 import { feeService } from '@/lib/services/fee'
 import type { FeeInvoice, PaymentMethod, FeeReceipt, ReceiptPrintData } from '@/lib/services/fee'
+import { numberError, hasNoErrors } from '@/lib/validation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +56,7 @@ export default function FeeCollectionPage() {
   const [invoiceLoading, setInvoiceLoading] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -92,15 +94,20 @@ export default function FeeCollectionPage() {
     setSelectedInvoice(inv)
     setPaymentAmount(inv.balanceAmount)
     setSubmitError('')
+    setFieldErrors({})
+  }
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const amountErr = numberError(paymentAmount, { required: true, min: 0.01, label: 'Payment amount' })
+    if (amountErr) errors.paymentAmount = amountErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
   }
 
   const handleCollectPayment = async () => {
     if (!selectedInvoice) return
-    const amount = parseFloat(paymentAmount)
-    if (isNaN(amount) || amount <= 0) {
-      setSubmitError('Please enter a valid amount')
-      return
-    }
+    if (!validate()) return
     setIsSubmitting(true)
     setSubmitError('')
     const result = await feeService.recordPayment({
@@ -259,10 +266,11 @@ export default function FeeCollectionPage() {
                         type="number"
                         value={paymentAmount}
                         onChange={e => setPaymentAmount(e.target.value)}
-                        className="mt-1"
+                        className={`mt-1 ${fieldErrors.paymentAmount ? 'border-destructive' : ''}`}
                         placeholder="0.00"
-                        min="0"
+                        min={0}
                       />
+                      {fieldErrors.paymentAmount && <p className="text-xs text-destructive mt-1">{fieldErrors.paymentAmount}</p>}
                     </div>
                     <div>
                       <Label>Payment Method</Label>

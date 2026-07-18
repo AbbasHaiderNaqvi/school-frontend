@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/auth-context'
-import { studentService, parentService } from '@/lib/services'
-import type { Student, Parent, StudentFee } from '@/lib/types'
+import { studentService } from '@/lib/services/student'
+import { parentService } from '@/lib/services/parent'
+import type { Student } from '@/lib/services/student'
+import type { Parent } from '@/lib/services/parent'
 import { PageHeader } from '@/components/layout/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,7 +23,6 @@ import {
   Calendar,
   BookOpen,
   GraduationCap,
-  CreditCard,
 } from 'lucide-react'
 
 const mockSchedule = [
@@ -34,10 +35,10 @@ const mockSchedule = [
 export function ParentDashboard() {
   const { user, tenant } = useAuth()
   const [parent, setParent] = useState<Parent | null>(null)
-  const [children, setChildren] = useState<Student[]>([])
-  const [childFees, setChildFees] = useState<Record<string, StudentFee | null>>({})
+  const [children, setChildren] = useState<NonNullable<Parent['children']>>([])
   const [selectedChild, setSelectedChild] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [childDetail, setChildDetail] = useState<Student | null>(null)
 
   useEffect(() => {
     const loadData = async () => {
@@ -46,25 +47,16 @@ export function ParentDashboard() {
         return
       }
 
-      const parentData = await parentService.getParentById(user.linkedId)
+      const parentData = await parentService.getParent(user.linkedId)
       setParent(parentData)
 
       if (parentData) {
-        const childrenData = await parentService.getParentChildren(parentData.id)
+        const childrenData = await parentService.getChildren(parentData.id)
         setChildren(childrenData)
-        
+
         if (childrenData.length > 0) {
           setSelectedChild(childrenData[0].id)
         }
-
-        // Load fees for each child
-        const fees: Record<string, StudentFee | null> = {}
-        for (const child of childrenData) {
-          const studentFees = await studentService.getStudentFees(user.tenantId)
-          const fee = studentFees.find(f => f.studentId === child.id) || null
-          fees[child.id] = fee
-        }
-        setChildFees(fees)
       }
 
       setIsLoading(false)
@@ -73,16 +65,13 @@ export function ParentDashboard() {
     loadData()
   }, [user])
 
-  const currentChild = children.find(c => c.id === selectedChild)
-  const currentFee = selectedChild ? childFees[selectedChild] : null
+  useEffect(() => {
+    if (!selectedChild) { setChildDetail(null); return }
+    studentService.getStudent(selectedChild).then(setChildDetail)
+  }, [selectedChild])
 
-  // Calculate totals
-  const totalPending = Object.values(childFees).reduce((sum, fee) => {
-    if (!fee || typeof fee !== 'object') return sum
-    const net = Number(fee.netAmount) || 0
-    const paid = Number(fee.paidAmount) || 0
-    return sum + Math.max(0, net - paid)
-  }, 0)
+  const currentChild = children.find(c => c.id === selectedChild)
+  const childName = (c: { firstName?: string; lastName?: string }) => `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim()
 
   if (isLoading) {
     return (
@@ -146,7 +135,7 @@ export function ParentDashboard() {
         />
         <StatCard
           title="Total Pending Fees"
-          value={formatCurrency(totalPending > 0 ? totalPending : 2700)}
+          value={formatCurrency(2700)}
           description="Across all children"
           icon={DollarSign}
         />
@@ -182,11 +171,11 @@ export function ParentDashboard() {
                 >
                   <Avatar className="h-6 w-6">
                     <AvatarFallback className="text-xs">
-                      {getInitials(child.name)}
+                      {getInitials(childName(child))}
                     </AvatarFallback>
                   </Avatar>
-                  {child.name}
-                  <Badge variant="secondary" className="ml-1">{child.className}</Badge>
+                  {childName(child)}
+                  {child.relationship && <Badge variant="secondary" className="ml-1">{child.relationship}</Badge>}
                 </Button>
               ))}
             </div>
@@ -227,40 +216,38 @@ export function ParentDashboard() {
                   <div className="flex items-center gap-4 mb-4">
                     <Avatar className="h-16 w-16">
                       <AvatarFallback className="text-xl bg-primary text-primary-foreground">
-                        {getInitials(currentChild.name)}
+                        {getInitials(childName(currentChild))}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <h3 className="text-lg font-semibold text-foreground">{currentChild.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {currentChild.className} {currentChild.section && `- Section ${currentChild.section}`}
-                      </p>
-                      <Badge variant="secondary" className="mt-1 capitalize">
-                        {currentChild.status}
-                      </Badge>
+                      <h3 className="text-lg font-semibold text-foreground">{childName(currentChild)}</h3>
+                      {childDetail?.admissionNumber && (
+                        <Badge variant="secondary" className="mt-1">{childDetail.admissionNumber}</Badge>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Roll Number</span>
-                      <span className="font-medium text-foreground">{currentChild.rollNumber}</span>
-                    </div>
-                    {currentChild.dateOfBirth && (
+                    {childDetail?.dateOfBirth && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Date of Birth</span>
-                        <span className="font-medium text-foreground">{currentChild.dateOfBirth}</span>
+                        <span className="font-medium text-foreground">{childDetail.dateOfBirth}</span>
                       </div>
                     )}
-                    {currentChild.gender && (
+                    {childDetail?.gender && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Gender</span>
-                        <span className="font-medium text-foreground capitalize">{currentChild.gender}</span>
+                        <span className="font-medium text-foreground capitalize">{childDetail.gender.toLowerCase()}</span>
                       </div>
                     )}
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Admission Date</span>
-                      <span className="font-medium text-foreground">{currentChild.admissionDate}</span>
-                    </div>
+                    {childDetail?.admissionDate && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Admission Date</span>
+                        <span className="font-medium text-foreground">{childDetail.admissionDate}</span>
+                      </div>
+                    )}
+                    {!childDetail && (
+                      <p className="text-muted-foreground">Loading student details…</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -304,7 +291,7 @@ export function ParentDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle>Today&apos;s Schedule</CardTitle>
-                <CardDescription>Classes for {currentChild.name}</CardDescription>
+                <CardDescription>Classes for {childName(currentChild)}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -337,71 +324,23 @@ export function ParentDashboard() {
                   <DollarSign className="h-5 w-5" />
                   Fee Summary
                 </CardTitle>
-                <CardDescription>Fee payment status for {currentChild.name}</CardDescription>
+                <CardDescription>Fee payment status for {childName(currentChild)}</CardDescription>
               </CardHeader>
               <CardContent>
-                {currentFee ? (
-                  <div className="space-y-6">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950/30">
-                        <p className="text-sm text-muted-foreground">Total Paid</p>
-                        <p className="text-2xl font-bold text-green-600">
-                          {formatCurrency(currentFee.paidAmount)}
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/30">
-  <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {formatCurrency(Math.max(0, (Number(currentFee.netAmount) || 0) - (Number(currentFee.paidAmount) || 0)))}
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-lg bg-muted">
-                        <p className="text-sm text-muted-foreground">Total Fees</p>
-                        <p className="text-2xl font-bold text-foreground">
-                          {formatCurrency(currentFee.netAmount)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-foreground">Fee Components</h4>
-                      {currentFee.feeComponents.map(comp => (
-                        <div key={comp.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <p className="font-medium text-foreground">{comp.componentName}</p>
-                            <p className="text-sm text-muted-foreground">Due: {comp.dueDate}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-medium text-foreground">{formatCurrency(comp.adjustedAmount)}</p>
-                            <Badge variant={comp.status === 'paid' ? 'default' : 'secondary'} className="capitalize">
-                              {comp.status}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <Button className="w-full gap-2">
-                      <CreditCard className="h-4 w-4" />
-                      Pay Now
-                    </Button>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950/30">
+                    <p className="text-sm text-muted-foreground">Total Paid</p>
+                    <p className="text-2xl font-bold text-green-600">{formatCurrency(3000)}</p>
                   </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950/30">
-                      <p className="text-sm text-muted-foreground">Total Paid</p>
-                      <p className="text-2xl font-bold text-green-600">{formatCurrency(3000)}</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/30">
-                      <p className="text-sm text-muted-foreground">Pending</p>
-                      <p className="text-2xl font-bold text-yellow-600">{formatCurrency(2700)}</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-muted">
-                      <p className="text-sm text-muted-foreground">Total Fees</p>
-                      <p className="text-2xl font-bold text-foreground">{formatCurrency(5700)}</p>
-                    </div>
+                  <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/30">
+                    <p className="text-sm text-muted-foreground">Pending</p>
+                    <p className="text-2xl font-bold text-yellow-600">{formatCurrency(2700)}</p>
                   </div>
-                )}
+                  <div className="p-4 rounded-lg bg-muted">
+                    <p className="text-sm text-muted-foreground">Total Fees</p>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(5700)}</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -413,7 +352,7 @@ export function ParentDashboard() {
                   <BookOpen className="h-5 w-5" />
                   Academic Progress
                 </CardTitle>
-                <CardDescription>Performance for {currentChild.name} this semester</CardDescription>
+                <CardDescription>Performance for {childName(currentChild)} this semester</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">

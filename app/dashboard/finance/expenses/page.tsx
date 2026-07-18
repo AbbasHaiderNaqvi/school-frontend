@@ -14,6 +14,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -27,6 +28,7 @@ import {
   Plus, Search, CheckCircle, Clock, XCircle, Loader2, DollarSign, RefreshCw,
 } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
+import { numberError, hasNoErrors } from '@/lib/validation'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -56,6 +58,7 @@ export default function ExpensesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createError, setCreateError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [newExpense, setNewExpense] = useState({
     description: '',
     amount: '',
@@ -89,8 +92,16 @@ export default function ExpensesPage() {
 
   if (!can('finance.transaction.read')) return <AccessDenied />
 
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    const amountErr = numberError(newExpense.amount, { required: true, min: 0, label: 'Amount' })
+    if (amountErr) errors.amount = amountErr
+    setFieldErrors(errors)
+    return hasNoErrors(errors)
+  }
+
   const handleCreate = async () => {
-    if (!newExpense.description || !newExpense.amount) return
+    if (!newExpense.description || !newExpense.amount || !validate()) return
     setIsSubmitting(true)
     setCreateError('')
     const result = await financeService.createTransaction({
@@ -99,8 +110,8 @@ export default function ExpensesPage() {
       description: newExpense.description,
       date: newExpense.date,
       reference: newExpense.reference || undefined,
-      categoryAccountId: newExpense.categoryAccountId && newExpense.categoryAccountId !== 'none' ? newExpense.categoryAccountId : undefined,
-      paymentAccountId: newExpense.paymentAccountId && newExpense.paymentAccountId !== 'none' ? newExpense.paymentAccountId : undefined,
+      categoryAccountId: newExpense.categoryAccountId || undefined,
+      paymentAccountId: newExpense.paymentAccountId || undefined,
     })
     if (result.error || !result.transaction) {
       setCreateError(result.error || 'Failed to create expense')
@@ -147,7 +158,7 @@ export default function ExpensesPage() {
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
             </Button>
             {can('finance.transaction.create') && (
-              <Button onClick={() => { setCreateError(''); setIsCreateOpen(true) }}>
+              <Button onClick={() => { setCreateError(''); setFieldErrors({}); setIsCreateOpen(true) }}>
                 <Plus className="h-4 w-4 mr-2" /> New Expense
               </Button>
             )}
@@ -283,7 +294,15 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Amount</Label>
-                <Input type="number" value={newExpense.amount} onChange={e => setNewExpense(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" className="mt-1" />
+                <Input
+                  type="number"
+                  min={0}
+                  value={newExpense.amount}
+                  onChange={e => setNewExpense(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="0.00"
+                  className={`mt-1 ${fieldErrors.amount ? 'border-destructive' : ''}`}
+                />
+                {fieldErrors.amount && <p className="text-xs text-destructive mt-1">{fieldErrors.amount}</p>}
               </div>
               <div>
                 <Label>Date</Label>
@@ -297,23 +316,27 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Category Account (optional)</Label>
-                <Select value={newExpense.categoryAccountId} onValueChange={v => setNewExpense(f => ({ ...f, categoryAccountId: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Expense account" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {glAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={newExpense.categoryAccountId}
+                  onValueChange={v => setNewExpense(f => ({ ...f, categoryAccountId: v }))}
+                  options={glAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                  placeholder="Expense account"
+                  searchPlaceholder="Search accounts…"
+                  emptyText="No accounts found."
+                  className="mt-1"
+                />
               </div>
               <div>
                 <Label>Payment Account (optional)</Label>
-                <Select value={newExpense.paymentAccountId} onValueChange={v => setNewExpense(f => ({ ...f, paymentAccountId: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Cash / bank account" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {assetAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.code} — {a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={newExpense.paymentAccountId}
+                  onValueChange={v => setNewExpense(f => ({ ...f, paymentAccountId: v }))}
+                  options={assetAccounts.map(a => ({ value: a.id, label: `${a.code} — ${a.name}`, keywords: a.code }))}
+                  placeholder="Cash / bank account"
+                  searchPlaceholder="Search accounts…"
+                  emptyText="No accounts found."
+                  className="mt-1"
+                />
               </div>
             </div>
           </div>
