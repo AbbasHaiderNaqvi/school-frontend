@@ -164,6 +164,22 @@ export interface BudgetChangeRequest {
   [key: string]: unknown
 }
 
+// Response casing unconfirmed — normalize both camelCase and snake_case so the
+// workflow buttons (keyed off status) can never silently disappear.
+function normalizeBudgetChangeRequest(raw: Record<string, unknown>): BudgetChangeRequest {
+  return {
+    ...raw,
+    id: raw.id as string,
+    budgetId: (raw.budgetId ?? raw.budget_id) as string,
+    budgetName: (raw.budgetName ?? raw.budget_name) as string | undefined,
+    fromAllocated: (raw.fromAllocated ?? raw.from_allocated) as string | undefined,
+    toAllocated: (raw.toAllocated ?? raw.to_allocated) as string,
+    reason: raw.reason as string | undefined,
+    status: String(raw.status ?? '').toUpperCase(),
+    createdAt: (raw.createdAt ?? raw.created_at) as string | undefined,
+  }
+}
+
 // No sample response was given for /finance/periods, so this stays loose
 // (just `id` guaranteed) rather than guessing field names — the UI renders
 // whatever keys actually come back instead of assuming a fixed shape.
@@ -364,23 +380,23 @@ export const financeService = {
     return { budget: data }
   },
 
-  // Budget Change Requests — reallocation flow:
-  // create (draft) → submit → approve/reject → apply
+  // Budget Change Requests — reallocation flow (guide §11):
+  // DRAFT → SUBMITTED → APPROVED/REJECTED → APPLIED
   async getBudgetChangeRequests(): Promise<BudgetChangeRequest[]> {
     const { data, error } = await api.get<unknown>('/finance/budget-change-requests')
     if (error) throw new Error(error)
-    return toArray<BudgetChangeRequest>(data)
+    return toArray<Record<string, unknown>>(data).map(normalizeBudgetChangeRequest)
   },
 
   async getBudgetChangeRequest(id: string): Promise<BudgetChangeRequest | null> {
-    const { data } = await api.get<BudgetChangeRequest>(`/finance/budget-change-requests/${id}`)
-    return data || null
+    const { data } = await api.get<Record<string, unknown>>(`/finance/budget-change-requests/${id}`)
+    return data ? normalizeBudgetChangeRequest(data) : null
   },
 
   async createBudgetChangeRequest(payload: { budgetId: string; toAllocated: string; reason: string }): Promise<{ request: BudgetChangeRequest | null; error?: string }> {
-    const { data, error } = await api.post<BudgetChangeRequest>('/finance/budget-change-requests', payload)
+    const { data, error } = await api.post<Record<string, unknown>>('/finance/budget-change-requests', payload)
     if (error || !data) return { request: null, error: error || 'Failed to create change request' }
-    return { request: data }
+    return { request: normalizeBudgetChangeRequest(data) }
   },
 
   async actOnBudgetChangeRequest(id: string, action: 'submit' | 'approve' | 'reject' | 'apply', reason?: string): Promise<{ success: boolean; error?: string }> {

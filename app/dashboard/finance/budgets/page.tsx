@@ -66,6 +66,7 @@ export default function BudgetsPage() {
   const [isCrLoading, setIsCrLoading] = useState(true)
   const [crError, setCrError] = useState('')
   const [crActionId, setCrActionId] = useState<string | null>(null)
+  const [crSuccess, setCrSuccess] = useState('')
   const [requestBudget, setRequestBudget] = useState<Budget | null>(null)
   const [requestToAllocated, setRequestToAllocated] = useState('')
   const [requestReason, setRequestReason] = useState('')
@@ -149,17 +150,21 @@ export default function BudgetsPage() {
   const handleCrAction = async (cr: BudgetChangeRequest, action: 'submit' | 'approve' | 'reject' | 'apply') => {
     let reason: string | undefined
     if (action === 'reject') {
-      const input = prompt('Reason for rejecting this change request:')
+      const input = prompt('Reason for rejecting this change request (min 5 characters):')
       if (input === null) return
-      reason = input.trim() || undefined
+      reason = input.trim()
+      if (reason.length < 5) { setCrError('A rejection reason of at least 5 characters is required.'); return }
     } else if (action === 'apply') {
       if (!confirm('Apply this change request? The budget allocation will be updated.')) return
     }
     setCrActionId(cr.id)
     setCrError('')
+    setCrSuccess('')
     const result = await financeService.actOnBudgetChangeRequest(cr.id, action, reason)
     setCrActionId(null)
     if (!result.success) { setCrError(result.error || `Failed to ${action} change request`); return }
+    setCrSuccess(`Change request ${action === 'submit' ? 'submitted' : action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'applied'}.`)
+    setTimeout(() => setCrSuccess(''), 4000)
     loadChangeRequests()
     if (action === 'apply') loadData()
   }
@@ -386,6 +391,7 @@ export default function BudgetsPage() {
             </CardHeader>
             <CardContent>
               {crError && <Alert variant="destructive" className="mb-4"><AlertDescription>{crError}</AlertDescription></Alert>}
+              {crSuccess && <Alert className="mb-4"><AlertDescription>{crSuccess}</AlertDescription></Alert>}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -435,7 +441,7 @@ export default function BudgetsPage() {
                                   <Send className="h-3.5 w-3.5 mr-1.5" /> Submit
                                 </Button>
                               )}
-                              {!busy && (status === 'SUBMITTED' || status === 'PENDING') && (
+                              {!busy && (status === 'SUBMITTED' || status === 'PENDING' || status === 'PENDING_APPROVAL') && (
                                 <>
                                   <Button variant="outline" size="sm" onClick={() => handleCrAction(cr, 'approve')}>
                                     <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-600" /> Approve
@@ -449,6 +455,19 @@ export default function BudgetsPage() {
                                 <Button size="sm" onClick={() => handleCrAction(cr, 'apply')}>
                                   <PlayCircle className="h-3.5 w-3.5 mr-1.5" /> Apply
                                 </Button>
+                              )}
+                              {!busy && !['DRAFT', 'SUBMITTED', 'PENDING', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'APPLIED'].includes(status) && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleCrAction(cr, 'submit')}><Send className="mr-2 h-4 w-4" /> Submit</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleCrAction(cr, 'approve')}><Check className="mr-2 h-4 w-4" /> Approve</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleCrAction(cr, 'reject')}><X className="mr-2 h-4 w-4" /> Reject</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleCrAction(cr, 'apply')}><PlayCircle className="mr-2 h-4 w-4" /> Apply</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               )}
                             </div>
                           </TableCell>
