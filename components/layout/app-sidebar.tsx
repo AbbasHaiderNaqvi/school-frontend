@@ -95,7 +95,7 @@ const navItems: NavItem[] = [
     children: [
       { title: 'Overview', href: '/dashboard/finance', icon: LayoutDashboard },
       { title: 'GL Accounts', href: '/dashboard/finance/gl', icon: FileText, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner'] },
-      { title: 'Fiscal Periods', href: '/dashboard/finance/periods', icon: CalendarClock, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner'] },
+      // { title: 'Fiscal Periods', href: '/dashboard/finance/periods', icon: CalendarClock, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner'] },
       { title: 'Reports', href: '/dashboard/finance/reports', icon: BarChart3, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner', 'tenant_principal'] },
       { title: 'All Transactions', href: '/dashboard/finance/all-transactions', icon: Receipt },
       { title: 'Transaction Flow', href: '/dashboard/finance/transactions-flow', icon: Wallet, roles: ['tenant_accountant', 'tenant_admin', 'tenant_principal'] },
@@ -117,9 +117,11 @@ const navItems: NavItem[] = [
       { title: 'Invoices', href: '/dashboard/fees/invoices', icon: Receipt },
       { title: 'Payments', href: '/dashboard/fees/payments', icon: Wallet },
       { title: 'Discounts & Scholarships', href: '/dashboard/fees/discounts', icon: BadgePercent, roles: ['tenant_admin', 'tenant_accountant', 'tenant_owner', 'tenant_principal'] },
+      { title: 'Overdue & Late Fees', href: '/dashboard/fees/overdue', icon: AlertCircle, roles: ['tenant_admin', 'tenant_accountant', 'tenant_owner', 'tenant_principal'] },
       { title: 'Fee Collection', href: '/dashboard/cashier/fee-collection', icon: Wallet, roles: ['tenant_cashier', 'tenant_accountant', 'tenant_admin'] },
       { title: 'Receipts', href: '/dashboard/receipts', icon: FileText },
       { title: 'Reports', href: '/dashboard/fees/reports', icon: BarChart3, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner', 'tenant_principal'] },
+      { title: 'Settings', href: '/dashboard/fees/settings', icon: Settings, roles: ['tenant_admin', 'tenant_accountant', 'tenant_owner'] },
     ],
   },
   {
@@ -165,25 +167,23 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    title: 'Students',
-    href: '/dashboard/students',
-    icon: GraduationCap,
-    roles: ['tenant_admin', 'tenant_principal', 'tenant_accountant', 'hr', 'tenant_owner'],
-    featureFlag: 'academics_module',
-  },
-  {
-    title: 'Parents',
-    href: '/dashboard/parents',
-    icon: Users,
-    roles: ['tenant_admin', 'tenant_principal', 'tenant_accountant', 'hr', 'tenant_owner'],
-    featureFlag: 'academics_module',
-  },
-  {
     title: 'Academics',
     icon: GraduationCap,
     roles: ['tenant_admin', 'tenant_principal', 'teacher', 'tenant_owner'],
     featureFlag: 'academics_module',
     children: [
+      {
+        title: 'Students',
+        href: '/dashboard/students',
+        icon: GraduationCap,
+        roles: ['tenant_admin', 'tenant_principal', 'tenant_accountant', 'hr', 'tenant_owner'],
+      },
+      {
+        title: 'Parents',
+        href: '/dashboard/parents',
+        icon: Users,
+        roles: ['tenant_admin', 'tenant_principal', 'tenant_accountant', 'hr', 'tenant_owner'],
+      },
       { title: 'Classes', href: '/dashboard/academics/classes', icon: GraduationCap },
       { title: 'Sections', href: '/dashboard/academics/sections', icon: LayoutList },
       {

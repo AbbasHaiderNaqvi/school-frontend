@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
@@ -28,6 +28,7 @@ import {
 import { Combobox } from '@/components/ui/combobox'
 import { getInitials } from '@/lib/utils'
 import { emailError, phoneError, hasNoErrors } from '@/lib/validation'
+import { ACADEMIC_YEARS } from '@/lib/academic-years'
 import {
   User,
   Building2,
@@ -120,8 +121,12 @@ export default function SettingsPage() {
   const [profileData, setProfileData] = useState({
     name: '',
     email: '',
-    avatar: '',
+    phone: '',
   })
+  const [profileSaved, setProfileSaved] = useState(false)
+  const [profileError, setProfileError] = useState('')
+  const [passwordSaved, setPasswordSaved] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
 
   // Password state
   const [passwordData, setPasswordData] = useState({
@@ -153,7 +158,7 @@ export default function SettingsPage() {
       setProfileData({
         name: user.name,
         email: user.email,
-        avatar: user.avatar || '',
+        phone: user.phone || '',
       })
     }
     if (tenant) {
@@ -292,29 +297,50 @@ export default function SettingsPage() {
   }
 
   const handleSaveProfile = async () => {
+    setProfileError('')
+    setProfileSaved(false)
+    if (!profileData.name.trim()) { setProfileError('Full name is required.'); return }
+    const phoneErr = phoneError(profileData.phone, false)
+    if (phoneErr) { setProfileError(phoneErr); return }
     setIsSaving(true)
-    await authService.updateUser({
-      name: profileData.name,
-      avatar: profileData.avatar,
+    const result = await authService.updateProfile({
+      fullName: profileData.name.trim(),
+      phone: profileData.phone.trim() || undefined,
     })
     setIsSaving(false)
+    if (!result.success) {
+      setProfileError(result.error || 'Failed to update profile.')
+      return
+    }
+    setProfileSaved(true)
+    setTimeout(() => setProfileSaved(false), 3000)
   }
 
   const handleSavePassword = async () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('Passwords do not match')
+    setPasswordError('')
+    setPasswordSaved(false)
+    if (!passwordData.currentPassword) {
+      setPasswordError('Current password is required.')
       return
     }
-    if (passwordData.newPassword.length < 6) {
-      alert('Password must be at least 6 characters')
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError('Passwords do not match.')
+      return
+    }
+    if (passwordData.newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.')
       return
     }
     setIsSaving(true)
-    // In a real app, this would validate the current password and update
-    await new Promise(resolve => setTimeout(resolve, 500))
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
+    const result = await authService.changePassword(passwordData.currentPassword, passwordData.newPassword)
     setIsSaving(false)
-    alert('Password updated successfully')
+    if (!result.success) {
+      setPasswordError(result.error || 'Failed to update password. Check your current password.')
+      return
+    }
+    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
+    setPasswordSaved(true)
+    setTimeout(() => setPasswordSaved(false), 3000)
   }
 
   const handleSaveSettings = async () => {
@@ -370,12 +396,13 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Profile Information</CardTitle>
-              <CardDescription>Update your personal information and profile picture</CardDescription>
+              <CardDescription>Update your name and phone number</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {profileError && <Alert variant="destructive"><AlertDescription>{profileError}</AlertDescription></Alert>}
+              {profileSaved && <Alert><AlertDescription>Profile updated.</AlertDescription></Alert>}
               <div className="flex items-center gap-6">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={profileData.avatar || "/placeholder.svg"} />
                   <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
                     {getInitials(profileData.name)}
                   </AvatarFallback>
@@ -385,21 +412,6 @@ export default function SettingsPage() {
                   <Badge variant="secondary" className="capitalize">
                     {user?.role?.replace('_', ' ')}
                   </Badge>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload Photo
-                    </Button>
-                    {profileData.avatar && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setProfileData(prev => ({ ...prev, avatar: '' }))}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </div>
                 </div>
               </div>
 
@@ -412,6 +424,15 @@ export default function SettingsPage() {
                     id="name"
                     value={profileData.name}
                     onChange={e => setProfileData(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={profileData.phone}
+                    onChange={e => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="+92 300 0000000"
                   />
                 </div>
                 <div className="space-y-2">
@@ -446,6 +467,8 @@ export default function SettingsPage() {
               <CardDescription>Update your password to keep your account secure</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {passwordError && <Alert variant="destructive"><AlertDescription>{passwordError}</AlertDescription></Alert>}
+              {passwordSaved && <Alert><AlertDescription>Password updated successfully.</AlertDescription></Alert>}
               <div className="space-y-2">
                 <Label htmlFor="current-password">Current Password</Label>
                 <div className="relative">
@@ -927,9 +950,7 @@ export default function SettingsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="2024-2025">2024-2025</SelectItem>
-                        <SelectItem value="2025-2026">2025-2026</SelectItem>
-                        <SelectItem value="2026-2027">2026-2027</SelectItem>
+                        {ACADEMIC_YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

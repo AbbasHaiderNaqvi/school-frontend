@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Combobox } from '@/components/ui/combobox'
 import { Attendance, AttendanceSummary, Employee } from '@/lib/types'
 import { Calendar, UserCheck, UserX, Clock } from 'lucide-react'
-import { TablePageSkeleton } from '@/components/ui/page-skeleton'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 export default function AttendancePage() {
   const { user, tenant } = useAuth()
@@ -85,10 +85,6 @@ export default function AttendancePage() {
   const presentCount = todayAttendance.filter(a => a.status === 'present').length
   const absentCount = todayAttendance.filter(a => a.status === 'absent').length
   const lateCount = todayAttendance.filter(a => a.status === 'late').length
-
-  if (isLoading) {
-    return <TablePageSkeleton />
-  }
 
   return (
     <div className="space-y-6">
@@ -209,7 +205,9 @@ export default function AttendancePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {todayAttendance.length > 0 ? (
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={5} />
+              ) : todayAttendance.length > 0 ? (
                 todayAttendance.map(att => (
                   <TableRow key={att.id}>
                     <TableCell>{att.employeeName}</TableCell>

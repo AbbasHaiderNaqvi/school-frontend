@@ -52,7 +52,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
-import { TablePageSkeleton } from '@/components/ui/page-skeleton'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 // Feature configuration with metadata
 const FEATURE_CONFIG: Record<keyof TenantFeatures, {
@@ -202,10 +202,6 @@ export default function FeatureFlagsPage() {
         </Card>
       </div>
     )
-  }
-
-  if (loading) {
-    return <TablePageSkeleton />
   }
 
   return (
@@ -379,6 +375,10 @@ export default function FeatureFlagsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {loading ? (
+                    <SkeletonTableRows rows={6} cols={5} />
+                  ) : (
+                    <>
                   {filteredTenants.map((tenant) => (
                     <TableRow key={tenant.id}>
                       <TableCell>
@@ -428,6 +428,8 @@ export default function FeatureFlagsPage() {
                       })}
                     </TableRow>
                   ))}
+                    </>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

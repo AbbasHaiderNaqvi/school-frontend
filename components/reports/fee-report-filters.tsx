@@ -6,12 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ACADEMIC_YEARS } from '@/lib/academic-years'
 import { Loader2, RefreshCw } from 'lucide-react'
-
-// Matches the established precedent in app/dashboard/fees/structures — no
-// academic-year list API is wired up anywhere in the app yet, so this mirrors
-// that same fixed 3-year set rather than introducing a new pattern.
-const ACADEMIC_YEARS = ['2024-2025', '2025-2026', '2026-2027']
 
 export interface FeeReportFilterValues {
   academicYear: string

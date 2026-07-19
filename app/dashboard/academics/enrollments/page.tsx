@@ -22,7 +22,8 @@ import {
 import {
   academicsService, type Enrollment, type EnrollmentStatus, type AcademicClass, type AcademicSection,
 } from '@/lib/services/academics'
-import { studentService, type StudentDropdownItem } from '@/lib/services/student'
+import { studentService, studentDropdownLabel, type StudentDropdownItem } from '@/lib/services/student'
+import { ACADEMIC_YEARS, DEFAULT_ACADEMIC_YEAR } from '@/lib/academic-years'
 import { Plus, Loader2, RefreshCw, ListChecks, ArrowUpCircle, History } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
@@ -35,10 +36,6 @@ function statusBadgeVariant(status: EnrollmentStatus): 'default' | 'secondary' |
   if (status === 'withdrawn' || status === 'transferred') return 'destructive'
   if (status === 'completed') return 'outline'
   return 'secondary'
-}
-
-function studentLabel(s: StudentDropdownItem): string {
-  return s.admissionNumber ? `${s.name} (${s.admissionNumber})` : s.name
 }
 
 export default function EnrollmentsPage() {
@@ -109,7 +106,7 @@ export default function EnrollmentsPage() {
   if (!can('academics.enrollment.read')) return <AccessDenied />
 
   const openCreate = () => {
-    setForm({ studentId: '', classId: '', sectionId: '', academicYear: '', rollNumber: '', notes: '' })
+    setForm({ studentId: '', classId: '', sectionId: '', academicYear: DEFAULT_ACADEMIC_YEAR, rollNumber: '', notes: '' })
     setSections([])
     setSubmitError('')
     setDialogOpen(true)
@@ -150,7 +147,7 @@ export default function EnrollmentsPage() {
   }
 
   const openPromote = () => {
-    setPromoteForm({ classId: '', academicYear: '', targetClassId: '', targetAcademicYear: '', targetSectionId: '' })
+    setPromoteForm({ classId: '', academicYear: DEFAULT_ACADEMIC_YEAR, targetClassId: '', targetAcademicYear: '', targetSectionId: '' })
     setPromoteSections([])
     setPromoteError('')
     setPromoteResult(null)
@@ -242,12 +239,13 @@ export default function EnrollmentsPage() {
               emptyText="No classes found."
               className="w-full sm:w-56"
             />
-            <Input
-              placeholder="Academic Year (e.g. 2025-2026)"
-              value={yearFilter}
-              onChange={e => setYearFilter(e.target.value)}
-              className="w-full sm:w-56"
-            />
+            <Select value={yearFilter || ALL} onValueChange={v => setYearFilter(v === ALL ? '' : v)}>
+              <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="All Years" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All Years</SelectItem>
+                {ACADEMIC_YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={v => setStatusFilter(v as EnrollmentStatus | 'all')}>
               <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -323,7 +321,7 @@ export default function EnrollmentsPage() {
               <Combobox
                 value={form.studentId}
                 onValueChange={v => setForm(f => ({ ...f, studentId: v }))}
-                options={students.map(s => ({ value: s.id, label: studentLabel(s) }))}
+                options={students.map(s => ({ value: s.id, label: studentDropdownLabel(s) }))}
                 placeholder="Select student"
                 searchPlaceholder="Search students…"
                 emptyText="No students found."
@@ -363,7 +361,12 @@ export default function EnrollmentsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label>Academic Year <span className="text-destructive">*</span></Label>
-                <Input value={form.academicYear} onChange={e => setForm(f => ({ ...f, academicYear: e.target.value }))} placeholder="2025-2026" className="mt-1" />
+                <Select value={form.academicYear} onValueChange={v => setForm(f => ({ ...f, academicYear: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select year" /></SelectTrigger>
+                  <SelectContent>
+                    {ACADEMIC_YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Roll Number (optional)</Label>
@@ -417,7 +420,12 @@ export default function EnrollmentsPage() {
               </div>
               <div>
                 <Label>Academic Year <span className="text-destructive">*</span></Label>
-                <Input value={promoteForm.academicYear} onChange={e => setPromoteForm(f => ({ ...f, academicYear: e.target.value }))} placeholder="2025-2026" className="mt-1" />
+                <Select value={promoteForm.academicYear} onValueChange={v => setPromoteForm(f => ({ ...f, academicYear: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select year" /></SelectTrigger>
+                  <SelectContent>
+                    {ACADEMIC_YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <p className="text-sm font-medium text-muted-foreground">To</p>
@@ -436,7 +444,12 @@ export default function EnrollmentsPage() {
               </div>
               <div>
                 <Label>Target Academic Year <span className="text-destructive">*</span></Label>
-                <Input value={promoteForm.targetAcademicYear} onChange={e => setPromoteForm(f => ({ ...f, targetAcademicYear: e.target.value }))} placeholder="2026-2027" className="mt-1" />
+                <Select value={promoteForm.targetAcademicYear || undefined} onValueChange={v => setPromoteForm(f => ({ ...f, targetAcademicYear: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select year" /></SelectTrigger>
+                  <SelectContent>
+                    {ACADEMIC_YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { money } from '@/lib/currency'
+import { printReceipt, downloadReceipt } from '@/lib/receipt-print'
 import { useEffect, useState, useCallback } from 'react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,46 +17,9 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { feeService } from '@/lib/services/fee'
 import type { FeeReceipt, ReceiptPrintData } from '@/lib/services/fee'
-import { Download, Eye, Search, FileText } from 'lucide-react'
+import { Download, Eye, Search, FileText, Printer } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
-
-function fmt(val: string | number | undefined): string {
-  const n = parseFloat(String(val ?? 0))
-  return isNaN(n) ? '0.00' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function buildReceiptHTML(data: ReceiptPrintData): string {
-  const lines = data.lines.map(l =>
-    `<tr><td style="padding:4px 8px">${l.componentName}</td><td style="padding:4px 8px;text-align:right">${money(l.amount)}</td></tr>`
-  ).join('')
-
-  return `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:24px;border:1px solid #ddd;border-radius:8px">
-    <div style="text-align:center;margin-bottom:24px;border-bottom:1px solid #eee;padding-bottom:16px">
-      <h2 style="margin:0">${data.tenant.name}</h2>
-      ${data.tenant.address ? `<p style="margin:4px 0;font-size:13px">${data.tenant.address}</p>` : ''}
-      ${data.tenant.phone ? `<p style="margin:4px 0;font-size:13px">${data.tenant.phone}</p>` : ''}
-      ${data.tenant.email ? `<p style="margin:4px 0;font-size:13px">${data.tenant.email}</p>` : ''}
-    </div>
-    <h3 style="text-align:center;letter-spacing:2px">FEE RECEIPT</h3>
-    <p style="text-align:center;color:#666;font-size:13px">Receipt No: ${data.receiptNo}</p>
-    <table style="width:100%;margin:16px 0;background:#f9f9f9;border-radius:4px">
-      <tr><td style="padding:4px 8px;font-weight:bold">Student</td><td style="padding:4px 8px">${data.student.fullName}</td></tr>
-      <tr><td style="padding:4px 8px;font-weight:bold">Code</td><td style="padding:4px 8px">${data.student.userCode}</td></tr>
-      ${data.student.className ? `<tr><td style="padding:4px 8px;font-weight:bold">Class</td><td style="padding:4px 8px">${data.student.className}</td></tr>` : ''}
-      <tr><td style="padding:4px 8px;font-weight:bold">Invoice</td><td style="padding:4px 8px">${data.invoice.invoiceNo}</td></tr>
-      <tr><td style="padding:4px 8px;font-weight:bold">Due Date</td><td style="padding:4px 8px">${data.invoice.dueDate}</td></tr>
-    </table>
-    ${lines ? `<table style="width:100%;margin:16px 0"><thead><tr style="border-bottom:1px solid #eee"><th style="text-align:left;padding:4px 8px">Component</th><th style="text-align:right;padding:4px 8px">Amount</th></tr></thead><tbody>${lines}</tbody></table>` : ''}
-    <table style="width:100%;margin:16px 0;background:#e8f4fd;border-radius:4px">
-      <tr><td style="padding:4px 8px;font-weight:bold">Payment Method</td><td style="padding:4px 8px">${data.payment.method}</td></tr>
-      ${data.payment.referenceNo ? `<tr><td style="padding:4px 8px;font-weight:bold">Reference</td><td style="padding:4px 8px">${data.payment.referenceNo}</td></tr>` : ''}
-      <tr><td style="padding:4px 8px;font-weight:bold">Payment Date</td><td style="padding:4px 8px">${data.payment.paymentDate}</td></tr>
-      <tr style="border-top:2px solid #ccc"><td style="padding:8px;font-size:18px;font-weight:bold">Amount Paid</td><td style="padding:8px;font-size:18px;font-weight:bold;text-align:right">${money(data.payment.amount)}</td></tr>
-    </table>
-    <p style="text-align:center;font-size:11px;color:#999;margin-top:24px">Computer-generated receipt • Valid without signature<br>Issued: ${data.issuedAt}</p>
-  </body></html>`
-}
 
 export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<FeeReceipt[]>([])
@@ -86,7 +50,8 @@ export default function ReceiptsPage() {
     const q = searchQuery.toLowerCase()
     return r.receiptNo.toLowerCase().includes(q) ||
       r.invoiceNo.toLowerCase().includes(q) ||
-      r.studentId.toLowerCase().includes(q)
+      r.studentName?.toLowerCase().includes(q) ||
+      r.className?.toLowerCase().includes(q)
   })
 
   const totalAmount = receipts.filter(r => !r.isVoided).reduce((s, r) => s + parseFloat(r.amount), 0)
@@ -104,14 +69,7 @@ export default function ReceiptsPage() {
   const handleDownload = async (receipt: FeeReceipt) => {
     const data = await feeService.getReceiptPrintData(receipt.id)
     if (!data) return
-    const html = buildReceiptHTML(data)
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Receipt_${receipt.receiptNo}.html`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadReceipt(data)
   }
 
   return (
@@ -153,7 +111,7 @@ export default function ReceiptsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by receipt no or invoice no…"
+              placeholder="Search by receipt no, invoice no, student, or class…"
               className="pl-10"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -165,28 +123,36 @@ export default function ReceiptsPage() {
                 <TableRow>
                   <TableHead>Receipt #</TableHead>
                   <TableHead>Invoice #</TableHead>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Class</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Issued At</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Payment Date</TableHead>
+                  <TableHead>Received By</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-24">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <SkeletonTableRows rows={6} cols={6} />
+                  <SkeletonTableRows rows={6} cols={10} />
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       No receipts found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filtered.map(r => (
-                    <TableRow key={r.id}>
+                    <TableRow key={r.id} className={r.isVoided ? 'opacity-60' : ''}>
                       <TableCell className="font-mono font-semibold">{r.receiptNo}</TableCell>
                       <TableCell className="font-mono text-sm">{r.invoiceNo}</TableCell>
-                      <TableCell className="text-right font-semibold">{money(r.amount)}</TableCell>
-                      <TableCell className="text-sm">{new Date(r.issuedAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-medium">{r.studentName ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{r.className ?? '—'}</TableCell>
+                      <TableCell className={`text-right font-semibold ${r.isVoided ? 'line-through text-muted-foreground' : ''}`}>{money(r.amount)}</TableCell>
+                      <TableCell className="text-sm">{r.paymentMethod ?? '—'}</TableCell>
+                      <TableCell className="text-sm">{r.paymentDate ?? r.createdAt?.slice(0, 10) ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{r.receivedByName ?? '—'}</TableCell>
                       <TableCell>
                         {r.isVoided
                           ? <Badge variant="destructive">Voided</Badge>
@@ -270,17 +236,11 @@ export default function ReceiptsPage() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setShowPreview(false)}>Close</Button>
-                <Button className="flex-1" onClick={async () => {
-                  const html = buildReceiptHTML(printData)
-                  const blob = new Blob([html], { type: 'text/html' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `Receipt_${printData.receiptNo}.html`
-                  a.click()
-                  URL.revokeObjectURL(url)
-                }}>
+                <Button variant="outline" className="flex-1" onClick={() => downloadReceipt(printData)}>
                   <Download className="h-4 w-4 mr-2" /> Download
+                </Button>
+                <Button className="flex-1" onClick={() => printReceipt(printData)}>
+                  <Printer className="h-4 w-4 mr-2" /> Print
                 </Button>
               </div>
             </div>

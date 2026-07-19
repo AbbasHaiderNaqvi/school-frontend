@@ -37,8 +37,8 @@ export function ParentFormDialog({ open, onOpenChange, editing, onSaved }: Paren
       setForm({
         firstName: editing.firstName,
         lastName: editing.lastName,
-        email: editing.email,
-        phone: editing.phone,
+        email: editing.email ?? '',
+        phone: editing.phone ?? '',
         cnic: editing.cnic ?? '',
         occupation: editing.occupation ?? '',
         address: editing.address ?? '',

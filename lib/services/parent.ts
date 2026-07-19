@@ -5,7 +5,7 @@ export interface Parent {
   firstName: string
   lastName: string
   email: string
-  phone: string
+  phone: string | null
   cnic?: string | null
   occupation?: string | null
   address?: string | null
@@ -13,8 +13,9 @@ export interface Parent {
   portalEnabled?: boolean
   portalStatus?: string | null
   userId?: string | null
-  children?: Array<{ id: string; firstName?: string; lastName?: string; admissionNumber?: string; relationship?: string; isPrimary?: boolean }>
+  students?: LinkedStudent[]
   createdAt?: string
+  updatedAt?: string | null
   [key: string]: unknown
 }
 
@@ -44,10 +45,8 @@ export interface Paginated<T> {
 }
 
 export interface LinkedStudent {
-  id: string
-  firstName?: string
-  lastName?: string
-  admissionNumber?: string
+  studentId: string
+  studentName?: string
   relationship?: string
   isPrimary?: boolean
   [key: string]: unknown
@@ -61,25 +60,24 @@ export interface LinkStudentRequest {
 
 // The backend returns snake_case for /parents (first_name, is_emergency_contact, …)
 // while the rest of this codebase's services use camelCase — normalize at the boundary.
-function normalizeChildRef(raw: Record<string, unknown>): NonNullable<Parent['children']>[number] {
+// The embedded/linked "students" list itself already comes back camelCase (studentId, studentName, …).
+function normalizeLinkedStudent(raw: Record<string, unknown>): LinkedStudent {
   return {
-    id: raw.id as string,
-    firstName: (raw.firstName ?? raw.first_name) as string | undefined,
-    lastName: (raw.lastName ?? raw.last_name) as string | undefined,
-    admissionNumber: (raw.admissionNumber ?? raw.admission_number) as string | undefined,
+    studentId: (raw.studentId ?? raw.student_id) as string,
+    studentName: (raw.studentName ?? raw.student_name) as string | undefined,
     relationship: raw.relationship as string | undefined,
     isPrimary: (raw.isPrimary ?? raw.is_primary) as boolean | undefined,
   }
 }
 
 function normalizeParent(raw: Record<string, unknown>): Parent {
-  const children = raw.children as unknown[] | undefined
+  const students = raw.students as unknown[] | undefined
   return {
     id: raw.id as string,
     firstName: (raw.firstName ?? raw.first_name) as string,
     lastName: (raw.lastName ?? raw.last_name) as string,
     email: raw.email as string,
-    phone: raw.phone as string,
+    phone: (raw.phone as string | null | undefined) ?? null,
     cnic: raw.cnic as string | null | undefined,
     occupation: raw.occupation as string | null | undefined,
     address: raw.address as string | null | undefined,
@@ -87,19 +85,9 @@ function normalizeParent(raw: Record<string, unknown>): Parent {
     portalEnabled: (raw.portalEnabled ?? raw.portal_enabled) as boolean | undefined,
     portalStatus: (raw.portalStatus ?? raw.portal_status) as string | null | undefined,
     userId: (raw.userId ?? raw.user_id) as string | null | undefined,
-    children: Array.isArray(children) ? children.map(c => normalizeChildRef(c as Record<string, unknown>)) : undefined,
+    students: Array.isArray(students) ? students.map(s => normalizeLinkedStudent(s as Record<string, unknown>)) : undefined,
     createdAt: (raw.createdAt ?? raw.created_at) as string | undefined,
-  }
-}
-
-function normalizeLinkedStudent(raw: Record<string, unknown>): LinkedStudent {
-  return {
-    id: raw.id as string,
-    firstName: (raw.firstName ?? raw.first_name) as string | undefined,
-    lastName: (raw.lastName ?? raw.last_name) as string | undefined,
-    admissionNumber: (raw.admissionNumber ?? raw.admission_number) as string | undefined,
-    relationship: raw.relationship as string | undefined,
-    isPrimary: (raw.isPrimary ?? raw.is_primary) as boolean | undefined,
+    updatedAt: (raw.updatedAt ?? raw.updated_at) as string | null | undefined,
   }
 }
 
@@ -157,9 +145,9 @@ export const parentService = {
     return { error: error || undefined }
   },
 
-  async getChildren(parentId: string): Promise<NonNullable<Parent['children']>> {
+  async getChildren(parentId: string): Promise<LinkedStudent[]> {
     const parent = await this.getParent(parentId)
-    return parent?.children ?? []
+    return parent?.students ?? []
   },
 
   async getLinkedStudents(parentId: string): Promise<LinkedStudent[]> {

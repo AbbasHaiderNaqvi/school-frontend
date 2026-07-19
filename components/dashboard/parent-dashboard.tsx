@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { studentService } from '@/lib/services/student'
 import { parentService } from '@/lib/services/parent'
 import type { Student } from '@/lib/services/student'
-import type { Parent } from '@/lib/services/parent'
+import type { Parent, LinkedStudent } from '@/lib/services/parent'
 import { PageHeader } from '@/components/layout/page-header'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -35,7 +35,7 @@ const mockSchedule = [
 export function ParentDashboard() {
   const { user, tenant } = useAuth()
   const [parent, setParent] = useState<Parent | null>(null)
-  const [children, setChildren] = useState<NonNullable<Parent['children']>>([])
+  const [children, setChildren] = useState<LinkedStudent[]>([])
   const [selectedChild, setSelectedChild] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [childDetail, setChildDetail] = useState<Student | null>(null)
@@ -55,7 +55,7 @@ export function ParentDashboard() {
         setChildren(childrenData)
 
         if (childrenData.length > 0) {
-          setSelectedChild(childrenData[0].id)
+          setSelectedChild(childrenData[0].studentId)
         }
       }
 
@@ -70,8 +70,8 @@ export function ParentDashboard() {
     studentService.getStudent(selectedChild).then(setChildDetail)
   }, [selectedChild])
 
-  const currentChild = children.find(c => c.id === selectedChild)
-  const childName = (c: { firstName?: string; lastName?: string }) => `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim()
+  const currentChild = children.find(c => c.studentId === selectedChild)
+  const childName = (c: { studentName?: string }) => c.studentName ?? 'Unknown'
 
   if (isLoading) {
     return (
@@ -164,9 +164,9 @@ export function ParentDashboard() {
             <div className="flex flex-wrap gap-3">
               {children.map(child => (
                 <Button
-                  key={child.id}
-                  variant={selectedChild === child.id ? 'default' : 'outline'}
-                  onClick={() => setSelectedChild(child.id)}
+                  key={child.studentId}
+                  variant={selectedChild === child.studentId ? 'default' : 'outline'}
+                  onClick={() => setSelectedChild(child.studentId)}
                   className="gap-2"
                 >
                   <Avatar className="h-6 w-6">

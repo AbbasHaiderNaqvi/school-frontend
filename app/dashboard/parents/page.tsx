@@ -27,7 +27,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Switch } from '@/components/ui/switch'
 import { ParentFormDialog } from '@/components/parents/parent-form-dialog'
 import { parentService, type Parent, type LinkedStudent } from '@/lib/services/parent'
-import { studentService, type StudentDropdownItem } from '@/lib/services/student'
+import { studentService, studentDropdownLabel, type StudentDropdownItem } from '@/lib/services/student'
 import { Plus, Search, MoreHorizontal, Edit, Trash2, Loader2, RefreshCw, Users, Eye, UserPlus } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
@@ -202,7 +202,7 @@ export default function ParentsPage() {
                     <TableRow key={parent.id}>
                       <TableCell className="font-semibold">{parent.firstName} {parent.lastName}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{parent.email}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{parent.phone}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{parent.phone ?? '—'}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{parent.occupation ?? '—'}</TableCell>
                       <TableCell>
                         <Badge variant={parent.isEmergencyContact ? 'default' : 'secondary'}>
@@ -280,13 +280,8 @@ export default function ParentsPage() {
                 {linkedStudents.length > 0 ? (
                   <div className="space-y-2">
                     {linkedStudents.map(child => (
-                      <div key={child.id} className="flex items-center justify-between border rounded-lg p-2 text-sm">
-                        <span>
-                          {child.firstName} {child.lastName}
-                          {child.admissionNumber && (
-                            <span className="ml-2 font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{child.admissionNumber}</span>
-                          )}
-                        </span>
+                      <div key={child.studentId} className="flex items-center justify-between border rounded-lg p-2 text-sm">
+                        <span>{child.studentName ?? child.studentId}</span>
                         <div className="flex items-center gap-2">
                           {child.relationship && <Badge variant="secondary" className="capitalize">{child.relationship}</Badge>}
                           {child.isPrimary && <Badge>Primary</Badge>}
@@ -310,8 +305,8 @@ export default function ParentsPage() {
                         value={linkStudentId}
                         onValueChange={setLinkStudentId}
                         options={studentsDropdown
-                          .filter(s => !linkedStudents.some(ls => ls.id === s.id))
-                          .map(s => ({ value: s.id, label: s.admissionNumber ? `${s.name} (${s.admissionNumber})` : s.name }))}
+                          .filter(s => !linkedStudents.some(ls => ls.studentId === s.id))
+                          .map(s => ({ value: s.id, label: studentDropdownLabel(s) }))}
                         placeholder="Select student"
                         searchPlaceholder="Search students…"
                         emptyText="No students found."

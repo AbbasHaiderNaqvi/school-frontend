@@ -24,9 +24,9 @@ export interface Student {
   status?: string
   portalEnabled?: boolean
   portalEmail?: string | null
+  portalStatus?: string | null
   userId?: string | null
   campusId?: string | null
-  guardian?: { id: string; firstName?: string; lastName?: string; email?: string; relationship?: string } | null
   createdAt?: string
   updatedAt?: string
   [key: string]: unknown
@@ -63,7 +63,14 @@ export interface StudentDropdownItem {
   id: string
   name: string
   admissionNumber?: string
+  status?: string
   [key: string]: unknown
+}
+
+// Canonical display label for a student picker: "Full Name (STD-2026-0014)".
+// Admission number is essential — many students share the same full name.
+export function studentDropdownLabel(s: StudentDropdownItem): string {
+  return s.admissionNumber ? `${s.name} (${s.admissionNumber})` : s.name
 }
 
 export interface Paginated<T> {
@@ -76,7 +83,6 @@ export interface Paginated<T> {
 // The backend returns snake_case for /students (admission_number, first_name, date_of_birth, …)
 // while the rest of this codebase's services use camelCase — normalize at the boundary.
 function normalizeStudent(raw: Record<string, unknown>): Student {
-  const g = raw.guardian as Record<string, unknown> | null | undefined
   return {
     id: raw.id as string,
     admissionNumber: (raw.admissionNumber ?? raw.admission_number) as string | undefined,
@@ -99,29 +105,24 @@ function normalizeStudent(raw: Record<string, unknown>): Student {
     status: raw.status as string | undefined,
     portalEnabled: (raw.portalEnabled ?? raw.portal_enabled) as boolean | undefined,
     portalEmail: (raw.portalEmail ?? raw.portal_email) as string | null | undefined,
+    portalStatus: (raw.portalStatus ?? raw.portal_status) as string | null | undefined,
     userId: (raw.userId ?? raw.user_id) as string | null | undefined,
     campusId: (raw.campusId ?? raw.campus_id) as string | null | undefined,
-    guardian: g
-      ? {
-          id: g.id as string,
-          firstName: (g.firstName ?? g.first_name) as string | undefined,
-          lastName: (g.lastName ?? g.last_name) as string | undefined,
-          email: g.email as string | undefined,
-          relationship: g.relationship as string | undefined,
-        }
-      : null,
     createdAt: (raw.createdAt ?? raw.created_at) as string | undefined,
     updatedAt: (raw.updatedAt ?? raw.updated_at) as string | undefined,
   }
 }
 
+// GET /students/dropdown returns { id, admission_number, full_name, status }.
 function normalizeStudentDropdownItem(raw: Record<string, unknown>): StudentDropdownItem {
+  const fullName = (raw.fullName ?? raw.full_name) as string | undefined
   const firstName = (raw.firstName ?? raw.first_name) as string | undefined
   const lastName = (raw.lastName ?? raw.last_name) as string | undefined
   return {
     id: raw.id as string,
-    name: (raw.name as string | undefined) ?? [firstName, lastName].filter(Boolean).join(' '),
+    name: (raw.name as string | undefined) ?? fullName ?? [firstName, lastName].filter(Boolean).join(' '),
     admissionNumber: (raw.admissionNumber ?? raw.admission_number) as string | undefined,
+    status: raw.status as string | undefined,
   }
 }
 

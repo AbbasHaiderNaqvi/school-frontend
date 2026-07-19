@@ -20,6 +20,7 @@ export interface User {
   role: UserRole // Primary role
   roles?: UserRole[] // Additional roles (for multi-role users)
   avatar?: string
+  phone?: string
   linkedId?: string // Links to parent/student record ID for those roles
   isActive: boolean
   createdAt: string

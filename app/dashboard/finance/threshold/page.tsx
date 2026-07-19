@@ -4,7 +4,7 @@ import { money } from '@/lib/currency'
 import { useAuth } from '@/contexts/auth-context'
 import { useEffect, useState, useCallback } from 'react'
 import { financeService } from '@/lib/services/finance'
-import type { ExpenseApprovalSettings } from '@/lib/services/finance'
+import type { ExpenseApprovalSettings, ExpenseApprovalHistoryEntry } from '@/lib/services/finance'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +14,10 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertTriangle, Loader2, Save } from 'lucide-react'
+import { AlertTriangle, Loader2, Save, History } from 'lucide-react'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
 import { numberError, hasNoErrors } from '@/lib/validation'
 
@@ -33,6 +36,8 @@ export default function ThresholdManagementPage() {
   const [newThreshold, setNewThreshold] = useState('')
   const [newEnabled, setNewEnabled] = useState(true)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [history, setHistory] = useState<ExpenseApprovalHistoryEntry[]>([])
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true)
 
   const canManageThreshold = user?.role === 'tenant_owner' || user?.role === 'tenant_admin' || user?.role === 'tenant_principal'
 
@@ -48,6 +53,19 @@ export default function ThresholdManagementPage() {
     setIsLoading(false)
   }, [])
 
+  const loadHistory = useCallback(async () => {
+    setIsHistoryLoading(true)
+    try {
+      setHistory(await financeService.getExpenseApprovalHistory())
+    } catch {
+      setHistory([])
+    } finally {
+      setIsHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadHistory() }, [loadHistory])
+
   useEffect(() => { loadSettings() }, [loadSettings])
 
   const validate = (): boolean => {
@@ -62,13 +80,13 @@ export default function ThresholdManagementPage() {
     if (!validate()) return
     setIsUpdating(true)
     setError('')
-    const ok = await financeService.updateExpenseApproval({ enabled: newEnabled, threshold: newThreshold })
-    if (!ok) {
-      setError('Failed to update expense approval settings')
+    const result = await financeService.updateExpenseApproval({ enabled: newEnabled, threshold: newThreshold })
+    if (!result.success) {
+      setError(result.error || 'Failed to update expense approval settings')
       setIsUpdating(false)
       return
     }
-    await loadSettings()
+    await Promise.all([loadSettings(), loadHistory()])
     setIsDialogOpen(false)
     setIsUpdating(false)
   }
@@ -138,6 +156,47 @@ export default function ThresholdManagementPage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Change History</CardTitle>
+          <CardDescription>Every change made to the approval threshold</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Approval</TableHead>
+                <TableHead className="text-right">Threshold</TableHead>
+                <TableHead>Changed By</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isHistoryLoading ? (
+                <SkeletonTableRows rows={4} cols={4} />
+              ) : history.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No changes recorded yet</TableCell>
+                </TableRow>
+              ) : (
+                history.map((h, i) => (
+                  <TableRow key={h.id ?? i}>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {typeof h.createdAt === 'string' ? h.createdAt.slice(0, 16).replace('T', ' ') : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={h.enabled ? 'default' : 'secondary'}>{h.enabled ? 'Enabled' : 'Disabled'}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">{h.threshold != null ? money(String(h.threshold)) : '—'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{(h.changedByName as string) ?? (h.changedByUserId as string) ?? '—'}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { financeService } from '@/lib/services/finance'
 import type { GlAccount, GlAccountType } from '@/lib/services/finance'
-import { Plus, Search, Loader2, MoreHorizontal, Edit, Database } from 'lucide-react'
+import { Plus, Search, Loader2, MoreHorizontal, Edit } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 type NormalSide = 'DEBIT' | 'CREDIT'
@@ -130,16 +130,6 @@ export default function GeneralLedgerPage() {
     loadAccounts()
   }
 
-  const handleSeedDefaults = async () => {
-    setIsSubmitting(true)
-    const result = await financeService.bootstrapDefaultGL()
-    setIsSubmitting(false)
-    if (result) {
-      loadAccounts()
-      alert(`Seeded ${result.created} default GL accounts.`)
-    }
-  }
-
   const filtered = accounts.filter(a => {
     const q = searchQuery.toLowerCase()
     return a.name.toLowerCase().includes(q) || a.code.toLowerCase().includes(q)
@@ -154,9 +144,6 @@ export default function GeneralLedgerPage() {
     <div className="space-y-6">
       <PageHeader title="General Ledger" description="Manage chart of accounts">
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSeedDefaults} disabled={isSubmitting}>
-            <Database className="h-4 w-4 mr-2" /> Seed Defaults
-          </Button>
           <Button onClick={() => { setSubmitError(''); setIsCreateOpen(true) }}>
             <Plus className="h-4 w-4 mr-2" /> Add Account
           </Button>

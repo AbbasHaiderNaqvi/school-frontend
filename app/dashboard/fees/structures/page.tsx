@@ -27,12 +27,13 @@ import {
 import { AccessDenied } from '@/components/ui/access-denied'
 import { feeService } from '@/lib/services/fee'
 import type { FeeStructure, FeeStructureStatus, FeeComponent } from '@/lib/services/fee'
+import { ACADEMIC_YEARS } from '@/lib/academic-years'
 import { academicsService } from '@/lib/services/academics'
 import type { AcademicClass } from '@/lib/services/academics'
 import { ManageFeeComponentsDialog } from '@/components/fees/manage-fee-components-dialog'
 import { ApplyStructureDialog } from '@/components/fees/apply-structure-dialog'
 import { Plus, Edit, Trash2, Copy, FileText, DollarSign, Loader2, MoreHorizontal, PlayCircle, PauseCircle, Users, Settings2 } from 'lucide-react'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 
 type FormComponent = { id: string; name: string; amount: number; dueDate: string; feeComponentId?: string }
 
@@ -235,10 +236,6 @@ export default function FeeStructuresPage() {
 
   if (!can('fees.structure.read')) return <AccessDenied />
 
-  if (isLoading) {
-    return <OverviewPageSkeleton />
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader title="Fee Structures" description="Define fee components and amounts for each class" />
@@ -266,7 +263,24 @@ export default function FeeStructuresPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {structures.map(s => (
+        {isLoading && Array.from({ length: 6 }).map((_, i) => (
+          <Card key={`skeleton-${i}`}>
+            <CardHeader className="pb-3">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-28 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-6 w-32" />
+              <div className="flex gap-2">
+                <Skeleton className="h-8 flex-1" />
+                <Skeleton className="h-8 flex-1" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {!isLoading && structures.map(s => (
           <Card key={s.id} className="hover:border-primary/50 transition-colors">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-2">
@@ -379,9 +393,7 @@ export default function FeeStructuresPage() {
                 <Select value={formAcademicYear} onValueChange={setFormAcademicYear}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="2024-2025">2024-2025</SelectItem>
-                    <SelectItem value="2025-2026">2025-2026</SelectItem>
-                    <SelectItem value="2026-2027">2026-2027</SelectItem>
+                    {ACADEMIC_YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

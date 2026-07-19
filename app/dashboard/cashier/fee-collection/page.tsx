@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Search, Receipt, Loader2, CheckCircle2, Download } from 'lucide-react'
+import { Search, Receipt, Loader2, CheckCircle2, Download, Printer } from 'lucide-react'
+import { printReceipt, downloadReceipt } from '@/lib/receipt-print'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -140,32 +141,12 @@ export default function FeeCollectionPage() {
 
   const handleDownloadReceipt = () => {
     if (!lastReceipt) return
-    const lines = lastReceipt.lines.map(l =>
-      `<tr><td style="padding:4px 8px">${l.componentName}</td><td style="padding:4px 8px;text-align:right">${money(l.amount)}</td></tr>`
-    ).join('')
-    const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:24px;border:1px solid #ddd;border-radius:8px">
-      <div style="text-align:center;margin-bottom:24px;border-bottom:1px solid #eee;padding-bottom:16px">
-        <h2 style="margin:0">${lastReceipt.tenant.name}</h2>
-      </div>
-      <h3 style="text-align:center;letter-spacing:2px">FEE RECEIPT</h3>
-      <p style="text-align:center;color:#666;font-size:13px">Receipt No: ${lastReceipt.receiptNo}</p>
-      <table style="width:100%;margin:16px 0;background:#f9f9f9;border-radius:4px">
-        <tr><td style="padding:4px 8px;font-weight:bold">Student</td><td style="padding:4px 8px">${lastReceipt.student.fullName}</td></tr>
-        <tr><td style="padding:4px 8px;font-weight:bold">Code</td><td style="padding:4px 8px">${lastReceipt.student.userCode}</td></tr>
-      </table>
-      ${lines ? `<table style="width:100%;margin:16px 0"><thead><tr><th style="text-align:left;padding:4px 8px">Component</th><th style="text-align:right;padding:4px 8px">Amount</th></tr></thead><tbody>${lines}</tbody></table>` : ''}
-      <table style="width:100%;margin:16px 0;background:#e8f4fd;border-radius:4px">
-        <tr><td style="padding:4px 8px;font-weight:bold">Method</td><td style="padding:4px 8px">${lastReceipt.payment.method}</td></tr>
-        <tr style="border-top:2px solid #ccc"><td style="padding:8px;font-size:18px;font-weight:bold">Amount Paid</td><td style="padding:8px;font-size:18px;font-weight:bold;text-align:right">${money(lastReceipt.payment.amount)}</td></tr>
-      </table>
-    </body></html>`
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Receipt_${lastReceipt.receiptNo}.html`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadReceipt(lastReceipt)
+  }
+
+  const handlePrintReceipt = () => {
+    if (!lastReceipt) return
+    printReceipt(lastReceipt)
   }
 
   return (
@@ -340,8 +321,11 @@ export default function FeeCollectionPage() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setReceiptDialog(false)}>Close</Button>
-                <Button className="flex-1" onClick={handleDownloadReceipt}>
-                  <Download className="h-4 w-4 mr-2" /> Download Receipt
+                <Button variant="outline" className="flex-1" onClick={handleDownloadReceipt}>
+                  <Download className="h-4 w-4 mr-2" /> Download
+                </Button>
+                <Button className="flex-1" onClick={handlePrintReceipt}>
+                  <Printer className="h-4 w-4 mr-2" /> Print
                 </Button>
               </div>
             </div>

@@ -37,7 +37,30 @@ export const tokenStore = {
   },
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+// When the refresh token itself is rejected the session is over — clear
+// everything and send the user to sign in (unless already on a public page).
+function onSessionExpired() {
+  tokenStore.clearTokens()
+  if (typeof window === 'undefined') return
+  localStorage.removeItem('mudir_session')
+  localStorage.removeItem('erp_current_user')
+  const path = window.location.pathname
+  if (path.startsWith('/login') || path.startsWith('/set-password') || path === '/') return
+  window.location.href = '/login'
+}
+
+// Single-flight: concurrent requests with an expired token must share ONE
+// refresh call — the backend rotates refresh tokens, so parallel refreshes
+// would invalidate each other and randomly log the user out.
+let refreshInFlight: Promise<string | null> | null = null
+
+function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = doRefreshAccessToken().finally(() => { refreshInFlight = null })
+  return refreshInFlight
+}
+
+async function doRefreshAccessToken(): Promise<string | null> {
   const refreshToken = tokenStore.getRefreshToken()
   if (!refreshToken) return null
 
@@ -49,17 +72,19 @@ async function refreshAccessToken(): Promise<string | null> {
     })
 
     if (!response.ok) {
-      tokenStore.clearTokens()
+      onSessionExpired()
       return null
     }
 
-    const data = await response.json()
+    const raw = await response.json().catch(() => null)
+    // Accept both bare { accessToken, … } and enveloped { data: { accessToken, … } }.
+    const data = (raw?.data && typeof raw.data === 'object' && 'accessToken' in raw.data ? raw.data : raw) ?? {}
     if (data.accessToken) {
       tokenStore.setTokens(data.accessToken, data.refreshToken || refreshToken, data.expiresIn || 900)
       return data.accessToken
     }
   } catch (error) {
-    console.error('[v0] Token refresh failed:', error)
+    console.error('[api] Token refresh failed:', error)
     tokenStore.clearTokens()
   }
 

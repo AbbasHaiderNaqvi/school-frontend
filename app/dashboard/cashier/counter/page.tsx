@@ -297,7 +297,7 @@ export default function CashierCounterPage() {
                   <TableBody>
                     {todayPayments.map(p => (
                       <TableRow key={p.id}>
-                        <TableCell className="font-mono text-sm">{p.invoiceId.slice(-8)}</TableCell>
+                        <TableCell className="font-mono text-sm">{p.invoiceNo ?? p.invoiceId.slice(-8)}</TableCell>
                         <TableCell><Badge variant="outline">{p.paymentMethod}</Badge></TableCell>
                         <TableCell className="text-sm font-mono">{p.referenceNo ?? '—'}</TableCell>
                         <TableCell className="text-right font-semibold text-green-600">{money(p.amount)}</TableCell>

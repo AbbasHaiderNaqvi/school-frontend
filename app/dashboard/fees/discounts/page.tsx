@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { money } from '@/lib/currency'
 import { useAuth } from '@/contexts/auth-context'
 import { feeService, type FeeDiscount, type DiscountType, type DiscountMode, type DiscountStatus } from '@/lib/services/fee'
-import { studentService, type StudentDropdownItem } from '@/lib/services/student'
+import { studentService, studentDropdownLabel, type StudentDropdownItem } from '@/lib/services/student'
 import { PageHeader } from '@/components/layout/page-header'
 import { AccessDenied } from '@/components/ui/access-denied'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,11 +18,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Combobox } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { numberError, requiredError, hasNoErrors } from '@/lib/validation'
+import { ACADEMIC_YEARS } from '@/lib/academic-years'
 import { Plus, Check, X, Edit, Trash2, Loader2, BadgePercent, Users } from 'lucide-react'
-
-const ACADEMIC_YEARS = ['2024-2025', '2025-2026', '2026-2027']
 
 const DISCOUNT_TYPES: Array<{ value: DiscountType; label: string }> = [
   { value: 'DISCOUNT', label: 'Discount' },
@@ -40,10 +39,6 @@ function statusBadgeVariant(status: DiscountStatus): 'default' | 'secondary' | '
   if (status === 'APPROVED') return 'default'
   if (status === 'REJECTED') return 'destructive'
   return 'secondary'
-}
-
-function studentLabel(s: StudentDropdownItem): string {
-  return s.admissionNumber ? `${s.name} (${s.admissionNumber})` : s.name
 }
 
 type FormState = {
@@ -189,7 +184,7 @@ export default function DiscountsPage() {
 
   const handleSelectStudent = (studentId: string) => {
     const student = studentsDropdown.find(s => s.id === studentId)
-    setForm(f => ({ ...f, studentId, studentLabel: student ? studentLabel(student) : studentId, invoiceId: '' }))
+    setForm(f => ({ ...f, studentId, studentLabel: student ? studentDropdownLabel(student) : studentId, invoiceId: '' }))
   }
 
   const validate = (): boolean => {
@@ -341,8 +336,6 @@ export default function DiscountsPage() {
 
   if (!canDiscount('read')) return <AccessDenied />
 
-  if (isLoading) return <OverviewPageSkeleton />
-
   return (
     <div className="space-y-6">
       <PageHeader title="Discounts & Scholarships" description="Review, approve, and manage fee discounts and scholarships" />
@@ -372,7 +365,7 @@ export default function DiscountsPage() {
           <Combobox
             value={studentFilter}
             onValueChange={setStudentFilter}
-            options={studentsDropdown.map(s => ({ value: s.id, label: studentLabel(s) }))}
+            options={studentsDropdown.map(s => ({ value: s.id, label: studentDropdownLabel(s) }))}
             placeholder="Filter by student"
             searchPlaceholder="Search students…"
             emptyText="No students found."
@@ -409,6 +402,10 @@ export default function DiscountsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={8} />
+              ) : (
+                <>
               {discounts.map(d => (
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.studentName ?? d.studentId}</TableCell>
@@ -452,6 +449,8 @@ export default function DiscountsPage() {
                   </TableCell>
                 </TableRow>
               )}
+                </>
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -481,7 +480,7 @@ export default function DiscountsPage() {
                 <Combobox
                   value={form.studentId}
                   onValueChange={handleSelectStudent}
-                  options={studentsDropdown.map(s => ({ value: s.id, label: studentLabel(s) }))}
+                  options={studentsDropdown.map(s => ({ value: s.id, label: studentDropdownLabel(s) }))}
                   placeholder="Select a student"
                   searchPlaceholder="Search students…"
                   emptyText="No students found."
@@ -597,7 +596,7 @@ export default function DiscountsPage() {
                 onValueChange={addBulkStudent}
                 options={studentsDropdown
                   .filter(s => !bulkForm.studentIds.includes(s.id))
-                  .map(s => ({ value: s.id, label: studentLabel(s) }))}
+                  .map(s => ({ value: s.id, label: studentDropdownLabel(s) }))}
                 placeholder="Add a student…"
                 searchPlaceholder="Search students…"
                 emptyText="No students found."
@@ -610,7 +609,7 @@ export default function DiscountsPage() {
                     const s = studentsDropdown.find(x => x.id === id)
                     return (
                       <Badge key={id} variant="secondary" className="gap-1 pr-1">
-                        {s ? studentLabel(s) : id}
+                        {s ? studentDropdownLabel(s) : id}
                         <button type="button" onClick={() => removeBulkStudent(id)} className="ml-1 rounded-full hover:bg-muted-foreground/20">
                           <X className="h-3 w-3" />
                         </button>

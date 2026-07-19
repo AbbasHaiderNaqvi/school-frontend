@@ -260,7 +260,7 @@ export default function StudentsPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Gender</TableHead>
                 <TableHead>Admission Date</TableHead>
-                <TableHead>Guardian</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -285,8 +285,8 @@ export default function StudentsPage() {
                       <TableCell className="font-semibold">{student.firstName} {student.lastName}</TableCell>
                       <TableCell className="text-muted-foreground text-sm capitalize">{student.gender?.toLowerCase() ?? '—'}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{student.admissionDate ? new Date(student.admissionDate).toLocaleDateString() : '—'}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {student.guardian ? `${student.guardian.firstName ?? ''} ${student.guardian.lastName ?? ''}`.trim() || student.guardian.email : '—'}
+                      <TableCell className="text-muted-foreground text-sm capitalize">
+                        {student.status ? <Badge variant={student.status === 'active' ? 'default' : 'secondary'} className="capitalize">{student.status}</Badge> : '—'}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -530,13 +530,12 @@ export default function StudentsPage() {
               <div className="col-span-2"><p className="text-muted-foreground">Previous School</p><p className="font-medium">{viewing?.previousSchool ?? '—'}</p></div>
               <div className="col-span-2"><p className="text-muted-foreground">Medical Notes</p><p className="font-medium">{viewing?.medicalNotes ?? '—'}</p></div>
               <div>
-                <p className="text-muted-foreground">Guardian</p>
-                <p className="font-medium">
-                  {viewing?.guardian
-                    ? `${viewing.guardian.firstName ?? ''} ${viewing.guardian.lastName ?? ''}`.trim() || viewing.guardian.email
-                    : '—'}
-                </p>
-                {viewing?.guardian?.relationship && <Badge variant="secondary" className="mt-1">{viewing.guardian.relationship}</Badge>}
+                <p className="text-muted-foreground">Status</p>
+                <p className="font-medium capitalize">{viewing?.status ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Portal</p>
+                <p className="font-medium">{viewing?.portalEnabled ? (viewing?.portalStatus ?? 'Enabled') : 'Not enabled'}</p>
               </div>
             </div>
           )}

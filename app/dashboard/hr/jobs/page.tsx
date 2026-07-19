@@ -14,7 +14,7 @@ import { employeeService } from '@/lib/services/hr'
 import { useUser } from '@/lib/hooks/use-user'
 import { Plus, Search, Briefcase } from 'lucide-react'
 import type { JobOpening } from '@/lib/types'
-import { TablePageSkeleton } from '@/components/ui/page-skeleton'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 export default function JobOpeningsPage() {
   const { user } = useUser()
@@ -140,10 +140,6 @@ export default function JobOpeningsPage() {
     }
   }
 
-  if (loading) {
-    return <TablePageSkeleton />
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -199,7 +195,9 @@ export default function JobOpeningsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredJobs.length === 0 ? (
+              {loading ? (
+                <SkeletonTableRows rows={6} cols={8} />
+              ) : filteredJobs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-muted-foreground">
                     No job openings found

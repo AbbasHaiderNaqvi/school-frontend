@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -20,13 +21,14 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { AccessDenied } from '@/components/ui/access-denied'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { feeService } from '@/lib/services/fee'
-import type { FeePayment, FeeInvoice, PaymentMethod } from '@/lib/services/fee'
+import type { FeePayment, FeeInvoice, FeeReceipt, ReceiptPrintData, PaymentMethod } from '@/lib/services/fee'
+import { printReceipt, downloadReceipt } from '@/lib/receipt-print'
 import { numberError, requiredError, hasNoErrors } from '@/lib/validation'
 import {
   Plus, Search, CreditCard, Banknote, Building2, Globe, Receipt,
-  DollarSign, Smartphone, Loader2,
+  DollarSign, Smartphone, Loader2, Printer, Download, CheckCircle2,
 } from 'lucide-react'
 
 function fmt(val: string | number | undefined): string {
@@ -70,6 +72,9 @@ export default function PaymentsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
+  const [savedReceipt, setSavedReceipt] = useState<FeeReceipt | null>(null)
+  const [savedPrintData, setSavedPrintData] = useState<ReceiptPrintData | null>(null)
+
   const loadPayments = useCallback(async () => {
     setIsLoading(true)
     setLoadError('')
@@ -88,6 +93,8 @@ export default function PaymentsPage() {
   const openRecordDialog = async () => {
     setSaveError('')
     setFieldErrors({})
+    setSavedReceipt(null)
+    setSavedPrintData(null)
     setSelectedInvoiceId('')
     setPaymentAmount('')
     setPaymentMethod('CASH')
@@ -134,27 +141,33 @@ export default function PaymentsPage() {
       setIsSaving(false)
       return
     }
-    setShowDialog(false)
     setIsSaving(false)
     loadPayments()
+    // Keep the dialog open in a success state so the cashier can print the receipt.
+    if (result.receipt) {
+      setSavedReceipt(result.receipt)
+      feeService.getReceiptPrintData(result.receipt.id).then(setSavedPrintData).catch(() => {})
+    } else {
+      setShowDialog(false)
+    }
   }
 
   const filteredPayments = payments.filter(p => {
     if (!searchQuery) return true
-    return p.referenceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.paymentDate.includes(searchQuery)
+    const q = searchQuery.toLowerCase()
+    return p.referenceNo?.toLowerCase().includes(q) ||
+      p.paymentDate.includes(searchQuery) ||
+      p.invoiceNo?.toLowerCase().includes(q) ||
+      p.studentName?.toLowerCase().includes(q)
   })
 
-  const totalCollected = payments.reduce((s, p) => s + parseFloat(p.amount), 0)
+  const completedPayments = payments.filter(p => p.status === 'COMPLETED')
+  const totalCollected = completedPayments.reduce((s, p) => s + parseFloat(p.amount), 0)
   const today = new Date().toISOString().split('T')[0]
-  const todayPayments = payments.filter(p => p.paymentDate === today || p.createdAt.startsWith(today))
+  const todayPayments = completedPayments.filter(p => p.paymentDate === today || p.createdAt?.startsWith(today))
   const todayCollected = todayPayments.reduce((s, p) => s + parseFloat(p.amount), 0)
 
   if (!can('fees.payment.read')) return <AccessDenied />
-
-  if (isLoading) {
-    return <OverviewPageSkeleton />
-  }
 
   return (
     <div className="space-y-6">
@@ -200,7 +213,7 @@ export default function PaymentsPage() {
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search by reference or date…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
+          <Input placeholder="Search by student, invoice, reference, or date…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
         </div>
         {can('fees.payment.create') && (
           <Button onClick={openRecordDialog} className="w-full sm:w-auto">
@@ -225,6 +238,7 @@ export default function PaymentsPage() {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Invoice</TableHead>
+                <TableHead>Student</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Method</TableHead>
                 <TableHead>Reference</TableHead>
@@ -232,13 +246,18 @@ export default function PaymentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={7} />
+              ) : (
+                <>
               {filteredPayments.map(p => {
                 const MethodIcon = METHOD_ICONS[p.paymentMethod] ?? Receipt
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="text-muted-foreground">{p.paymentDate}</TableCell>
-                    <TableCell className="font-mono text-sm">{p.invoiceId.slice(-8)}</TableCell>
-                    <TableCell className="text-right font-semibold text-green-600">{money(p.amount)}</TableCell>
+                    <TableCell className="font-mono text-sm">{p.invoiceNo ?? p.invoiceId.slice(-8)}</TableCell>
+                    <TableCell>{p.studentName ?? '—'}</TableCell>
+                    <TableCell className={`text-right font-semibold ${p.status === 'COMPLETED' ? 'text-green-600' : 'text-muted-foreground line-through'}`}>{money(p.amount)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <MethodIcon className="h-4 w-4 text-muted-foreground" />
@@ -246,14 +265,20 @@ export default function PaymentsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{p.referenceNo || '—'}</TableCell>
-                    <TableCell className="text-sm">{p.status}</TableCell>
+                    <TableCell>
+                      <Badge variant={p.status === 'COMPLETED' ? 'default' : p.status === 'REVERSED' || p.status === 'VOIDED' ? 'destructive' : 'secondary'}>
+                        {p.status}
+                      </Badge>
+                    </TableCell>
                   </TableRow>
                 )
               })}
               {filteredPayments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No payments recorded yet</TableCell>
+                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No payments recorded yet</TableCell>
                 </TableRow>
+              )}
+                </>
               )}
             </TableBody>
           </Table>
@@ -263,9 +288,39 @@ export default function PaymentsPage() {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
-            <DialogDescription>Select an invoice and record a payment</DialogDescription>
+            <DialogTitle>{savedReceipt ? 'Payment Recorded' : 'Record Payment'}</DialogTitle>
+            <DialogDescription>
+              {savedReceipt ? `Receipt ${savedReceipt.receiptNo} was generated` : 'Select an invoice and record a payment'}
+            </DialogDescription>
           </DialogHeader>
+          {savedReceipt ? (
+            <div className="space-y-4">
+              <div className="flex flex-col items-center py-4 gap-2">
+                <CheckCircle2 className="h-12 w-12 text-green-600" />
+                <p className="font-semibold text-lg">{money(savedReceipt.amount)} collected</p>
+                <p className="text-sm text-muted-foreground font-mono">{savedReceipt.receiptNo}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setShowDialog(false)}>Done</Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  disabled={!savedPrintData}
+                  onClick={() => savedPrintData && downloadReceipt(savedPrintData)}
+                >
+                  <Download className="h-4 w-4 mr-2" /> Download
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={!savedPrintData}
+                  onClick={() => savedPrintData && printReceipt(savedPrintData)}
+                >
+                  {savedPrintData ? <Printer className="h-4 w-4 mr-2" /> : <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Print
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
           {saveError && <Alert variant="destructive"><AlertDescription>{saveError}</AlertDescription></Alert>}
           <div className="space-y-4 py-2">
             <div>
@@ -354,6 +409,8 @@ export default function PaymentsPage() {
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Record Payment
             </Button>
           </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

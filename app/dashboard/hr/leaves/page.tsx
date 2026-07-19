@@ -25,7 +25,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { requiredError, numberError, hasNoErrors } from '@/lib/validation'
 import {
   Plus, Check, X, Edit, Trash2, Loader2, CalendarDays, ListChecks, Wallet2, Ban,
@@ -337,8 +337,6 @@ export default function LeavesPage() {
 
   if (!canLeaveApplication('read')) return <AccessDenied />
 
-  if (isLoading) return <OverviewPageSkeleton />
-
   return (
     <div className="space-y-6">
       <PageHeader title="Leave Management" description="Leave types, applications, approvals, and employee balances" />
@@ -372,9 +370,7 @@ export default function LeavesPage() {
 
           <Card>
             <CardContent className="pt-6 overflow-x-auto">
-              {isLoadingApplications ? (
-                <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-              ) : (
+              {(
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -388,6 +384,10 @@ export default function LeavesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {isLoading || isLoadingApplications ? (
+                      <SkeletonTableRows rows={6} cols={7} />
+                    ) : (
+                      <>
                     {applications.map(a => (
                       <TableRow key={a.id}>
                         <TableCell className="font-medium">{a.employeeName ?? a.employeeId}</TableCell>
@@ -427,6 +427,8 @@ export default function LeavesPage() {
                         </TableCell>
                       </TableRow>
                     )}
+                      </>
+                    )}
                   </TableBody>
                 </Table>
               )}
@@ -456,6 +458,10 @@ export default function LeavesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {isLoading ? (
+                    <SkeletonTableRows rows={4} cols={6} />
+                  ) : (
+                    <>
                   {leaveTypes.map(t => (
                     <TableRow key={t.id}>
                       <TableCell>
@@ -484,6 +490,8 @@ export default function LeavesPage() {
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-muted-foreground py-12">No leave types defined yet.</TableCell>
                     </TableRow>
+                  )}
+                    </>
                   )}
                 </TableBody>
               </Table>

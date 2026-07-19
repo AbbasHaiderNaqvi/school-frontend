@@ -43,6 +43,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from '@/components/layout/page-header'
 import { AccessDenied } from '@/components/ui/access-denied'
 import { ManageUserGroupsDialog } from '@/components/users/manage-user-groups-dialog'
+import { metadataService, type AssignableRole } from '@/lib/services/metadata'
 import { emailError, phoneError, hasNoErrors } from '@/lib/validation'
 import {
   UserPlus, Edit, Trash2, Search, MoreHorizontal,
@@ -50,7 +51,8 @@ import {
 } from 'lucide-react'
 import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
-const ROLE_OPTIONS: Array<{ value: ApiUserRole; label: string }> = [
+// Shown only if GET /metadata/roles/assignable fails — the API list is authoritative.
+const FALLBACK_ROLES: AssignableRole[] = [
   { value: 'tenant_owner', label: 'Tenant Owner' },
   { value: 'tenant_admin', label: 'Admin' },
   { value: 'tenant_principal', label: 'Principal' },
@@ -78,6 +80,7 @@ const ROLE_COLORS: Record<string, string> = {
 export default function UserManagementPage() {
   const { can } = useAuth()
   const [users, setUsers] = useState<UserListItem[]>([])
+  const [roleOptions, setRoleOptions] = useState<AssignableRole[]>(FALLBACK_ROLES)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -117,6 +120,17 @@ export default function UserManagementPage() {
   }, [page, search, roleFilter, statusFilter])
 
   useEffect(() => { loadUsers() }, [loadUsers])
+
+  useEffect(() => {
+    metadataService.getAssignableRoles()
+      .then(roles => {
+        if (roles.length > 0) {
+          setRoleOptions(roles)
+          setAddForm(f => (roles.some(r => r.value === f.role) ? f : { ...f, role: roles[0].value as ApiUserRole }))
+        }
+      })
+      .catch(() => { /* keep fallback list */ })
+  }, [])
 
   if (!can('users.user.read')) return <AccessDenied />
 
@@ -245,7 +259,7 @@ export default function UserManagementPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
-                {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                {roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
@@ -413,9 +427,14 @@ export default function UserManagementPage() {
                     <Select value={addForm.role} onValueChange={v => setAddForm(f => ({ ...f, role: v as ApiUserRole, employeeId: '', studentId: '', parentId: '' }))}>
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                        {roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {roleOptions.find(r => r.value === addForm.role)?.description && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {roleOptions.find(r => r.value === addForm.role)?.description}
+                      </p>
+                    )}
                   </div>
                   {addForm.role === 'student' ? (
                     <div className="col-span-2">

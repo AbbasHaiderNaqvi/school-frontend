@@ -13,7 +13,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { inventoryService, type InventorySettings, type BudgetEnforcement } from '@/lib/services/inventory'
 import { financeService, type GlAccount } from '@/lib/services/finance'
 import { Loader2, Save, Settings2 } from 'lucide-react'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { FormPageSkeleton } from '@/components/ui/page-skeleton'
 
 const NONE = '__none__'
 
@@ -69,7 +69,7 @@ export default function InventorySettingsPage() {
 
   if (!can('inventory.settings.read')) return <AccessDenied />
 
-  if (isLoading) return <OverviewPageSkeleton />
+  if (isLoading) return <FormPageSkeleton sections={2} />
 
   const handleSave = async () => {
     setIsSaving(true)

@@ -1,18 +1,22 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { money } from '@/lib/currency'
 import { useAuth } from '@/contexts/auth-context'
-import { financeService, type GlAccount } from '@/lib/services/finance'
+import { financeService, type GlAccount, type TrialBalanceRow, type LedgerRow } from '@/lib/services/finance'
 import { PageHeader } from '@/components/layout/page-header'
 import { AccessDenied } from '@/components/ui/access-denied'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Combobox } from '@/components/ui/combobox'
 import { ReportView } from '@/components/reports/report-view'
-import { Loader2, RefreshCw, Scale, BookText, FileStack, TrendingUp, Landmark } from 'lucide-react'
+import { Loader2, RefreshCw, Scale, BookText, FileStack, TrendingUp, Landmark, CheckCircle2, AlertTriangle } from 'lucide-react'
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
@@ -27,6 +31,123 @@ function firstOfMonthStr() {
 const TABS = ['trial-balance', 'ledger', 'statement', 'income-statement', 'balance-sheet'] as const
 type ReportTab = typeof TABS[number]
 
+function TrialBalanceReport({ rows, hideZero }: { rows: TrialBalanceRow[]; hideZero: boolean }) {
+  const visible = hideZero
+    ? rows.filter(r => parseFloat(r.debit) !== 0 || parseFloat(r.credit) !== 0)
+    : rows
+  const totalDebit = rows.reduce((s, r) => s + parseFloat(r.debit || '0'), 0)
+  const totalCredit = rows.reduce((s, r) => s + parseFloat(r.credit || '0'), 0)
+  const balanced = Math.abs(totalDebit - totalCredit) < 0.005
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-10">No data for this period.</p>
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        {balanced ? (
+          <Badge className="bg-green-100 text-green-700 gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Balanced</Badge>
+        ) : (
+          <Badge variant="destructive" className="gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Out of balance by {money(Math.abs(totalDebit - totalCredit))}</Badge>
+        )}
+        <span className="text-sm text-muted-foreground">{visible.length} of {rows.length} accounts shown</span>
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Account</TableHead>
+              <TableHead className="text-right">Debit</TableHead>
+              <TableHead className="text-right">Credit</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.map(r => (
+              <TableRow key={r.glAccountId}>
+                <TableCell className="font-mono text-sm">{r.code}</TableCell>
+                <TableCell>{r.name}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{parseFloat(r.debit) !== 0 ? money(r.debit) : '—'}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{parseFloat(r.credit) !== 0 ? money(r.credit) : '—'}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow className="border-t-2 font-bold bg-muted/50">
+              <TableCell colSpan={2}>Total</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{money(totalCredit)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}
+
+function LedgerReport({ rows }: { rows: LedgerRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-10">No entries for this account in the selected period.</p>
+  }
+
+  const account = rows[0]
+  const totalDebit = rows.reduce((s, r) => s + parseFloat(r.debit || '0'), 0)
+  const totalCredit = rows.reduce((s, r) => s + parseFloat(r.credit || '0'), 0)
+
+  let running = 0
+  const withBalance = rows.map(r => {
+    running += parseFloat(r.debit || '0') - parseFloat(r.credit || '0')
+    return { ...r, runningBalance: running }
+  })
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="font-semibold">{account.code} — {account.name}</span>
+        <span className="text-sm text-muted-foreground">{rows.length} entries</span>
+        <span className="text-sm text-muted-foreground">Net movement: <span className={`font-mono font-medium ${running >= 0 ? 'text-green-600' : 'text-red-600'}`}>{money(running)}</span></span>
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Entry No</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Memo</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Debit</TableHead>
+              <TableHead className="text-right">Credit</TableHead>
+              <TableHead className="text-right">Balance</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {withBalance.map((r, i) => (
+              <TableRow key={`${r.journalEntryId}-${i}`}>
+                <TableCell className="text-sm whitespace-nowrap">{r.date?.slice(0, 10)}</TableCell>
+                <TableCell className="font-mono text-sm">{r.entryNo}</TableCell>
+                <TableCell className="max-w-[280px] truncate" title={r.description}>{r.description}</TableCell>
+                <TableCell className="max-w-[200px] truncate text-muted-foreground text-sm" title={r.memo ?? undefined}>{r.memo ?? '—'}</TableCell>
+                <TableCell>
+                  <Badge variant={r.status === 'POSTED' ? 'default' : 'secondary'}>{r.status}</Badge>
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{parseFloat(r.debit) !== 0 ? money(r.debit) : '—'}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{parseFloat(r.credit) !== 0 ? money(r.credit) : '—'}</TableCell>
+                <TableCell className={`text-right font-mono tabular-nums font-medium ${r.runningBalance < 0 ? 'text-red-600' : ''}`}>{money(r.runningBalance)}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow className="border-t-2 font-bold bg-muted/50">
+              <TableCell colSpan={5}>Total</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{money(totalCredit)}</TableCell>
+              <TableCell className={`text-right font-mono tabular-nums ${running < 0 ? 'text-red-600' : ''}`}>{money(running)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}
+
 export default function FinanceReportsPage() {
   const { can } = useAuth()
   const [activeTab, setActiveTab] = useState<ReportTab>('trial-balance')
@@ -36,14 +157,15 @@ export default function FinanceReportsPage() {
 
   // Trial balance
   const [trialAsOf, setTrialAsOf] = useState(todayStr())
-  const [trialData, setTrialData] = useState<unknown>(null)
+  const [trialData, setTrialData] = useState<TrialBalanceRow[] | null>(null)
   const [trialLoading, setTrialLoading] = useState(false)
+  const [hideZero, setHideZero] = useState(true)
 
   // Ledger
   const [ledgerAccountId, setLedgerAccountId] = useState('')
   const [ledgerFrom, setLedgerFrom] = useState(firstOfMonthStr())
   const [ledgerTo, setLedgerTo] = useState(todayStr())
-  const [ledgerData, setLedgerData] = useState<unknown>(null)
+  const [ledgerData, setLedgerData] = useState<LedgerRow[] | null>(null)
   const [ledgerLoading, setLedgerLoading] = useState(false)
 
   // Statement
@@ -132,6 +254,10 @@ export default function FinanceReportsPage() {
                 <Label htmlFor="trial-as-of">As of</Label>
                 <Input id="trial-as-of" type="date" value={trialAsOf} onChange={e => setTrialAsOf(e.target.value)} className="w-44" />
               </div>
+              <div className="flex items-center gap-2 pb-2">
+                <Switch id="hide-zero" checked={hideZero} onCheckedChange={setHideZero} />
+                <Label htmlFor="hide-zero" className="cursor-pointer">Hide zero balances</Label>
+              </div>
               <Button onClick={runTrialBalance} disabled={trialLoading}>
                 {trialLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
                 Run Report
@@ -143,7 +269,7 @@ export default function FinanceReportsPage() {
               {trialLoading ? (
                 <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
-                <ReportView data={trialData} />
+                <TrialBalanceReport rows={trialData ?? []} hideZero={hideZero} />
               )}
             </CardContent>
           </Card>
@@ -185,7 +311,7 @@ export default function FinanceReportsPage() {
               ) : !ledgerAccountId ? (
                 <p className="text-sm text-muted-foreground text-center py-10">Select a GL account to view its ledger.</p>
               ) : (
-                <ReportView data={ledgerData} />
+                <LedgerReport rows={ledgerData ?? []} />
               )}
             </CardContent>
           </Card>

@@ -21,10 +21,11 @@ import {
 } from '@/components/ui/table'
 import { AccessDenied } from '@/components/ui/access-denied'
 import { feeService } from '@/lib/services/fee'
-import type { FeeInvoice, InvoiceStatus, PaymentMethod } from '@/lib/services/fee'
+import type { FeeInvoice, FeeReceipt, ReceiptPrintData, InvoiceStatus, PaymentMethod } from '@/lib/services/fee'
+import { printReceipt, downloadReceipt } from '@/lib/receipt-print'
 import { numberError, hasNoErrors } from '@/lib/validation'
-import { Search, CreditCard, Loader2 } from 'lucide-react'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { Search, CreditCard, Loader2, Printer, Download, CheckCircle2 } from 'lucide-react'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 
 function fmt(val: string | number | undefined): string {
   const n = parseFloat(String(val ?? 0))
@@ -45,7 +46,7 @@ export default function InvoicesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterStatus, setFilterStatus] = useState<string>('ISSUED')
 
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<FeeInvoice | null>(null)
@@ -56,6 +57,9 @@ export default function InvoicesPage() {
   const [paymentError, setPaymentError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  const [savedReceipt, setSavedReceipt] = useState<FeeReceipt | null>(null)
+  const [savedPrintData, setSavedPrintData] = useState<ReceiptPrintData | null>(null)
 
   const loadInvoices = useCallback(async () => {
     setIsLoading(true)
@@ -84,6 +88,8 @@ export default function InvoicesPage() {
     setReferenceNo('')
     setPaymentError('')
     setFieldErrors({})
+    setSavedReceipt(null)
+    setSavedPrintData(null)
     setIsPaymentOpen(true)
   }
 
@@ -112,9 +118,15 @@ export default function InvoicesPage() {
       setIsSubmitting(false)
       return
     }
-    setIsPaymentOpen(false)
     setIsSubmitting(false)
     loadInvoices()
+    // Keep the dialog open in a success state so the receipt can be printed.
+    if (result.receipt) {
+      setSavedReceipt(result.receipt)
+      feeService.getReceiptPrintData(result.receipt.id).then(setSavedPrintData).catch(() => {})
+    } else {
+      setIsPaymentOpen(false)
+    }
   }
 
   const filtered = invoices.filter(i => {
@@ -126,10 +138,6 @@ export default function InvoicesPage() {
   })
 
   if (!can('fees.invoice.read')) return <AccessDenied />
-
-  if (isLoading) {
-    return <OverviewPageSkeleton />
-  }
 
   return (
     <div className="space-y-6">
@@ -176,6 +184,10 @@ export default function InvoicesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={9} />
+              ) : (
+                <>
               {filtered.map(invoice => (
                 <TableRow key={invoice.id}>
                   <TableCell className="font-mono text-sm">{invoice.invoiceNo}</TableCell>
@@ -202,6 +214,8 @@ export default function InvoicesPage() {
                   <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No invoices found</TableCell>
                 </TableRow>
               )}
+                </>
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -210,11 +224,41 @@ export default function InvoicesPage() {
       <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Record Payment</DialogTitle>
+            <DialogTitle>{savedReceipt ? 'Payment Recorded' : 'Record Payment'}</DialogTitle>
             <DialogDescription>
-              {selectedInvoice && `Invoice ${selectedInvoice.invoiceNo} — ${selectedInvoice.studentName ?? ''}`}
+              {savedReceipt
+                ? `Receipt ${savedReceipt.receiptNo} was generated`
+                : selectedInvoice && `Invoice ${selectedInvoice.invoiceNo} — ${selectedInvoice.studentName ?? ''}`}
             </DialogDescription>
           </DialogHeader>
+          {savedReceipt ? (
+            <div className="space-y-4">
+              <div className="flex flex-col items-center py-4 gap-2">
+                <CheckCircle2 className="h-12 w-12 text-green-600" />
+                <p className="font-semibold text-lg">{money(savedReceipt.amount)} collected</p>
+                <p className="text-sm text-muted-foreground font-mono">{savedReceipt.receiptNo}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setIsPaymentOpen(false)}>Done</Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  disabled={!savedPrintData}
+                  onClick={() => savedPrintData && downloadReceipt(savedPrintData)}
+                >
+                  <Download className="h-4 w-4 mr-2" /> Download
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={!savedPrintData}
+                  onClick={() => savedPrintData && printReceipt(savedPrintData)}
+                >
+                  {savedPrintData ? <Printer className="h-4 w-4 mr-2" /> : <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Print
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
           {paymentError && <Alert variant="destructive"><AlertDescription>{paymentError}</AlertDescription></Alert>}
           {selectedInvoice && (
             <div className="space-y-4 py-2">
@@ -265,6 +309,8 @@ export default function InvoicesPage() {
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Record Payment
             </Button>
           </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

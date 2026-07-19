@@ -9,6 +9,12 @@ export interface MetadataDropdowns {
   glAccountTypes: Array<{ value: string; label: string }>
 }
 
+export interface AssignableRole {
+  value: string
+  label: string
+  description?: string
+}
+
 export interface FeeDropdowns {
   classes: Array<{ id: string; name: string; sortOrder: number }>
   paymentMethods: Array<{ value: string; label: string }>
@@ -24,9 +30,11 @@ export const metadataService = {
     return data || null
   },
 
-  async getAssignableRoles(): Promise<Array<{ value: string; label: string }>> {
-    const { data } = await api.get<Array<{ value: string; label: string }>>('/metadata/roles/assignable')
-    return data || []
+  // GET /metadata/roles/assignable returns { data: [{ value, label, description }] }
+  async getAssignableRoles(): Promise<AssignableRole[]> {
+    const { data } = await api.get<unknown>('/metadata/roles/assignable')
+    const list = Array.isArray(data) ? data : (data as { data?: unknown[] } | null)?.data ?? []
+    return list as AssignableRole[]
   },
 
   async getFinanceDropdowns(): Promise<unknown> {

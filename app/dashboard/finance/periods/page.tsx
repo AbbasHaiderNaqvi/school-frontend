@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 import { Lock, LockOpen, Loader2, CalendarClock } from 'lucide-react'
 
 // No sample response shape was given for /finance/periods, so rather than
@@ -120,8 +120,6 @@ export default function FiscalPeriodsPage() {
 
   if (!can('finance.period.read')) return <AccessDenied />
 
-  if (isLoading) return <OverviewPageSkeleton />
-
   const columns = Array.from(
     periods.reduce((set, row) => {
       Object.keys(row).forEach(k => { if (!HIDDEN_KEYS.has(k)) set.add(k) })
@@ -150,6 +148,10 @@ export default function FiscalPeriodsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {isLoading ? (
+                <SkeletonTableRows rows={6} cols={columns.length + 3} />
+              ) : (
+                <>
               {periods.map(p => {
                 const closed = isPeriodClosed(p)
                 return (
@@ -186,6 +188,8 @@ export default function FiscalPeriodsPage() {
                     No fiscal periods found.
                   </TableCell>
                 </TableRow>
+              )}
+                </>
               )}
             </TableBody>
           </Table>

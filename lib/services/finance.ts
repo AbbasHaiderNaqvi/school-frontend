@@ -16,6 +16,29 @@ function unwrapReport(raw: unknown): unknown {
   return raw
 }
 
+// Confirmed response shapes for /finance/reports/trial-balance and /finance/reports/ledger.
+export interface TrialBalanceRow {
+  glAccountId: string
+  code: string
+  name: string
+  debit: string
+  credit: string
+}
+
+export interface LedgerRow {
+  journalEntryId: string
+  entryNo: string
+  date: string
+  description: string
+  status: string
+  glAccountId: string
+  code: string
+  name: string
+  debit: string
+  credit: string
+  memo?: string | null
+}
+
 export type GlAccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY'
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER'
 export type TransactionStatus = 'POSTED' | 'PENDING_APPROVAL' | 'REJECTED' | 'REVERSED'
@@ -85,14 +108,21 @@ export interface PendingExpense {
   paymentAccount?: { code: string; name: string }
 }
 
+// Confirmed shape of GET /finance/budgets — spent/remaining are computed
+// server-side; the linked expense account comes flat (categoryCode/categoryName).
 export interface Budget {
   id: string
   name: string
-  glAccountId?: string
-  glAccount?: { id: string; code: string; name: string }
-  allocatedAmount: string
+  status?: string
+  categoryAccountId?: string
+  categoryCode?: string
+  categoryName?: string
+  allocated: string
+  spent: string
+  remaining: string
   startDate: string
   endDate: string
+  createdAt?: string
 }
 
 export interface CreateBudgetRequest {
@@ -106,6 +136,32 @@ export interface CreateBudgetRequest {
 export interface ExpenseApprovalSettings {
   enabled: boolean
   threshold: string
+}
+
+// GET /finance/expense-approval/history — row shape unconfirmed, so only the
+// obvious fields are typed; pages render extra keys dynamically if needed.
+export interface ExpenseApprovalHistoryEntry {
+  id?: string
+  threshold?: string
+  enabled?: boolean
+  changedByUserId?: string
+  changedByName?: string
+  createdAt?: string
+  [key: string]: unknown
+}
+
+export type BudgetChangeRequestStatus = 'DRAFT' | 'SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED'
+
+export interface BudgetChangeRequest {
+  id: string
+  budgetId: string
+  budgetName?: string
+  fromAllocated?: string
+  toAllocated: string
+  reason?: string
+  status: BudgetChangeRequestStatus | string
+  createdAt?: string
+  [key: string]: unknown
 }
 
 // No sample response was given for /finance/periods, so this stays loose
@@ -209,20 +265,22 @@ export const financeService = {
   },
 
   // Reports
-  async getTrialBalance(params: { asOf?: string } = {}): Promise<unknown> {
+  async getTrialBalance(params: { asOf?: string } = {}): Promise<TrialBalanceRow[]> {
     const query = new URLSearchParams()
     if (params.asOf) query.set('asOf', params.asOf)
     const qs = query.toString()
     const { data } = await api.get(`/finance/reports/trial-balance${qs ? `?${qs}` : ''}`)
-    return unwrapReport(data)
+    const rows = unwrapReport(data)
+    return Array.isArray(rows) ? (rows as TrialBalanceRow[]) : []
   },
 
-  async getLedger(params: { glAccountId: string; from?: string; to?: string }): Promise<unknown> {
+  async getLedger(params: { glAccountId: string; from?: string; to?: string }): Promise<LedgerRow[]> {
     const query = new URLSearchParams({ glAccountId: params.glAccountId })
     if (params.from) query.set('from', params.from)
     if (params.to) query.set('to', params.to)
     const { data } = await api.get(`/finance/reports/ledger?${query.toString()}`)
-    return unwrapReport(data)
+    const rows = unwrapReport(data)
+    return Array.isArray(rows) ? (rows as LedgerRow[]) : []
   },
 
   async getStatement(params: { from?: string; to?: string } = {}): Promise<unknown> {
@@ -269,9 +327,15 @@ export const financeService = {
     return data || null
   },
 
-  async updateExpenseApproval(payload: ExpenseApprovalSettings): Promise<boolean> {
+  async updateExpenseApproval(payload: ExpenseApprovalSettings): Promise<{ success: boolean; error?: string }> {
     const { error } = await api.put('/finance/expense-approval', payload)
-    return !error
+    return { success: !error, error: error ?? undefined }
+  },
+
+  async getExpenseApprovalHistory(): Promise<ExpenseApprovalHistoryEntry[]> {
+    const { data, error } = await api.get<unknown>('/finance/expense-approval/history')
+    if (error) throw new Error(error)
+    return toArray<ExpenseApprovalHistoryEntry>(data)
   },
 
   // Budgets
@@ -281,10 +345,47 @@ export const financeService = {
     return toArray<Budget>(data)
   },
 
+  async getBudget(id: string): Promise<Budget | null> {
+    const { data } = await api.get<Budget>(`/finance/budgets/${id}`)
+    return data || null
+  },
+
   async createBudget(payload: CreateBudgetRequest): Promise<{ budget: Budget | null; error?: string }> {
     const { data, error } = await api.post<Budget>('/finance/budgets', payload)
     if (error || !data) return { budget: null, error: error || 'Failed to create budget' }
     return { budget: data }
+  },
+
+  // Only name and status can change here — allocation changes go through the
+  // Budget Change Request flow. ACTIVE → CLOSED is permanent.
+  async updateBudget(id: string, payload: { name?: string; status?: string }): Promise<{ budget: Budget | null; error?: string }> {
+    const { data, error } = await api.patch<Budget>(`/finance/budgets/${id}`, payload)
+    if (error || !data) return { budget: null, error: error || 'Failed to update budget' }
+    return { budget: data }
+  },
+
+  // Budget Change Requests — reallocation flow:
+  // create (draft) → submit → approve/reject → apply
+  async getBudgetChangeRequests(): Promise<BudgetChangeRequest[]> {
+    const { data, error } = await api.get<unknown>('/finance/budget-change-requests')
+    if (error) throw new Error(error)
+    return toArray<BudgetChangeRequest>(data)
+  },
+
+  async getBudgetChangeRequest(id: string): Promise<BudgetChangeRequest | null> {
+    const { data } = await api.get<BudgetChangeRequest>(`/finance/budget-change-requests/${id}`)
+    return data || null
+  },
+
+  async createBudgetChangeRequest(payload: { budgetId: string; toAllocated: string; reason: string }): Promise<{ request: BudgetChangeRequest | null; error?: string }> {
+    const { data, error } = await api.post<BudgetChangeRequest>('/finance/budget-change-requests', payload)
+    if (error || !data) return { request: null, error: error || 'Failed to create change request' }
+    return { request: data }
+  },
+
+  async actOnBudgetChangeRequest(id: string, action: 'submit' | 'approve' | 'reject' | 'apply', reason?: string): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.post(`/finance/budget-change-requests/${id}/${action}`, reason ? { reason } : {})
+    return { success: !error, error: error ?? undefined }
   },
 
   // Fiscal Periods

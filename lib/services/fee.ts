@@ -95,30 +95,40 @@ export interface FeeInvoice {
 
 export interface FeePayment {
   id: string
-  tenantId: string
+  tenantId?: string
   invoiceId: string
+  invoiceNo?: string
   studentId: string
+  studentName?: string
   amount: string
   paymentMethod: PaymentMethod
   paymentDate: string
-  referenceNo?: string
+  referenceNo?: string | null
   notes?: string
   status: PaymentStatus
+  receivedByUserId?: string
   createdAt: string
 }
 
 export interface FeeReceipt {
   id: string
-  tenantId: string
+  tenantId?: string
   receiptNo: string
+  paymentId: string
   invoiceId: string
   invoiceNo: string
-  paymentId: string
   studentId: string
+  studentName?: string
+  className?: string
   amount: string
-  issuedAt: string
+  paymentMethod?: PaymentMethod
+  paymentDate?: string
+  receivedByUserId?: string
+  receivedByName?: string
   isVoided: boolean
+  voidedAt?: string | null
   createdAt: string
+  [key: string]: unknown
 }
 
 export interface ReceiptPrintData {
@@ -185,26 +195,30 @@ export interface FeeDashboardSummary {
   collectionRate: string
 }
 
+export type LateFeeType = 'FIXED' | 'PERCENTAGE'
+
 export interface FeeSettings {
-  tenantId: string
+  tenantId?: string
   receiptPrefix: string
+  invoicePrefix: string
+  defaultDueDay: number
+  lateFeeEnabled: boolean
+  lateFeeType: LateFeeType
+  lateFeeAmount: string
+  lateFeeApplyAfterDays: number
+  maxLateFee?: string | null
+  autoMarkOverdue: boolean
   allowPartialPayment: boolean
   allowAdvancePayment: boolean
-  lateFeeEnabled: boolean
   financeIntegrationEnabled: boolean
-  defaultReceivableAccountId?: string
-  defaultFeeIncomeAccountId?: string
-  defaultCashAccountId?: string
-  lateFeeRule?: LateFeeRule
+  defaultCashAccountId?: string | null
+  defaultBankAccountId?: string | null
+  defaultFeeIncomeAccountId?: string | null
+  defaultReceivableAccountId?: string | null
+  [key: string]: unknown
 }
 
-export interface LateFeeRule {
-  enabled: boolean
-  chargeType: 'PERCENTAGE' | 'FIXED'
-  chargeValue: string
-  gracePeriodDays: number
-  compoundingEnabled: boolean
-}
+export type SaveFeeSettingsRequest = Omit<FeeSettings, 'tenantId'>
 
 export interface FinanceMapping {
   defaultReceivableAccountId?: string
@@ -325,6 +339,72 @@ function normalizeFeeInvoice(raw: Record<string, unknown>): FeeInvoice {
     lines: Array.isArray(rawLines) ? (rawLines as FeeInvoiceLine[]) : undefined,
     createdAt: (raw.created_at ?? raw.createdAt) as string,
     updatedAt: (raw.updated_at ?? raw.updatedAt) as string | undefined,
+  }
+}
+
+function normalizeFeeSettings(raw: Record<string, unknown>): FeeSettings {
+  return {
+    tenantId: (raw.tenant_id ?? raw.tenantId) as string | undefined,
+    receiptPrefix: (raw.receipt_prefix ?? raw.receiptPrefix) as string,
+    invoicePrefix: (raw.invoice_prefix ?? raw.invoicePrefix) as string,
+    defaultDueDay: Number(raw.default_due_day ?? raw.defaultDueDay ?? 10),
+    lateFeeEnabled: Boolean(raw.late_fee_enabled ?? raw.lateFeeEnabled),
+    lateFeeType: ((raw.late_fee_type ?? raw.lateFeeType) as LateFeeType | undefined) ?? 'FIXED',
+    lateFeeAmount: String(raw.late_fee_amount ?? raw.lateFeeAmount ?? '0'),
+    lateFeeApplyAfterDays: Number(raw.late_fee_apply_after_days ?? raw.lateFeeApplyAfterDays ?? 0),
+    maxLateFee: (raw.max_late_fee ?? raw.maxLateFee) as string | null | undefined,
+    autoMarkOverdue: Boolean(raw.auto_mark_overdue ?? raw.autoMarkOverdue),
+    allowPartialPayment: Boolean(raw.allow_partial_payment ?? raw.allowPartialPayment),
+    allowAdvancePayment: Boolean(raw.allow_advance_payment ?? raw.allowAdvancePayment),
+    financeIntegrationEnabled: Boolean(raw.finance_integration_enabled ?? raw.financeIntegrationEnabled),
+    defaultCashAccountId: (raw.default_cash_account_id ?? raw.defaultCashAccountId) as string | null | undefined,
+    defaultBankAccountId: (raw.default_bank_account_id ?? raw.defaultBankAccountId) as string | null | undefined,
+    defaultFeeIncomeAccountId: (raw.default_fee_income_account_id ?? raw.defaultFeeIncomeAccountId) as string | null | undefined,
+    defaultReceivableAccountId: (raw.default_receivable_account_id ?? raw.defaultReceivableAccountId) as string | null | undefined,
+  }
+}
+
+// GET /fees/receipts returns snake_case (receipt_no, is_voided, …) plus flat
+// display fields (student_name, class_name, received_by_name) — confirmed from
+// a real response. There is no issued_at; created_at is the issue timestamp.
+function normalizeFeeReceipt(raw: Record<string, unknown>): FeeReceipt {
+  return {
+    id: raw.id as string,
+    tenantId: (raw.tenant_id ?? raw.tenantId) as string | undefined,
+    receiptNo: (raw.receipt_no ?? raw.receiptNo) as string,
+    paymentId: (raw.payment_id ?? raw.paymentId) as string,
+    invoiceId: (raw.invoice_id ?? raw.invoiceId) as string,
+    invoiceNo: (raw.invoice_no ?? raw.invoiceNo) as string,
+    studentId: (raw.student_id ?? raw.studentId) as string,
+    studentName: (raw.student_name ?? raw.studentName) as string | undefined,
+    className: (raw.class_name ?? raw.className) as string | undefined,
+    amount: raw.amount as string,
+    paymentMethod: (raw.payment_method ?? raw.paymentMethod) as PaymentMethod | undefined,
+    paymentDate: (raw.payment_date ?? raw.paymentDate) as string | undefined,
+    receivedByUserId: (raw.received_by_user_id ?? raw.receivedByUserId) as string | undefined,
+    receivedByName: (raw.received_by_name ?? raw.receivedByName) as string | undefined,
+    isVoided: Boolean(raw.is_voided ?? raw.isVoided),
+    voidedAt: (raw.voided_at ?? raw.voidedAt) as string | null | undefined,
+    createdAt: (raw.created_at ?? raw.createdAt) as string,
+  }
+}
+
+function normalizeFeePayment(raw: Record<string, unknown>): FeePayment {
+  return {
+    id: raw.id as string,
+    tenantId: (raw.tenant_id ?? raw.tenantId) as string | undefined,
+    invoiceId: (raw.invoice_id ?? raw.invoiceId) as string,
+    invoiceNo: (raw.invoice_no ?? raw.invoiceNo) as string | undefined,
+    studentId: (raw.student_id ?? raw.studentId) as string,
+    studentName: (raw.student_name ?? raw.studentName) as string | undefined,
+    amount: raw.amount as string,
+    paymentMethod: (raw.payment_method ?? raw.paymentMethod) as PaymentMethod,
+    paymentDate: (raw.payment_date ?? raw.paymentDate) as string,
+    referenceNo: (raw.reference_no ?? raw.referenceNo) as string | null | undefined,
+    notes: raw.notes as string | undefined,
+    status: raw.status as PaymentStatus,
+    receivedByUserId: (raw.received_by_user_id ?? raw.receivedByUserId) as string | undefined,
+    createdAt: (raw.created_at ?? raw.createdAt) as string,
   }
 }
 
@@ -486,44 +566,49 @@ export const feeService = {
 
   // ── Payments ─────────────────────────────────────────────────────────────────
   async getPayments(params: { page?: number; limit?: number; studentId?: string; invoiceId?: string; paymentMethod?: PaymentMethod; status?: PaymentStatus; from?: string; to?: string } = {}): Promise<Paginated<FeePayment>> {
-    const { data, error } = await api.get<Paginated<FeePayment>>(`/fees/payments${buildQS(params)}`)
+    const { data, error } = await api.get<unknown>(`/fees/payments${buildQS(params)}`)
     if (error) throw new Error(error)
-    return toPaginated(data)
+    const paginated = toPaginated<Record<string, unknown>>(data)
+    return { ...paginated, data: paginated.data.map(normalizeFeePayment) }
   },
 
   async getPaymentById(id: string): Promise<FeePayment | null> {
-    const { data } = await api.get<FeePayment>(`/fees/payments/${id}`)
-    return data || null
+    const { data } = await api.get<Record<string, unknown>>(`/fees/payments/${id}`)
+    return data ? normalizeFeePayment(data) : null
   },
 
   async recordPayment(payload: { invoiceId: string; amount: string; paymentMethod: PaymentMethod; paymentDate: string; referenceNo?: string; notes?: string; receivedByUserId?: string }): Promise<{ payment: FeePayment | null; receipt: FeeReceipt | null; error?: string }> {
-    const { data, error } = await api.post<{ payment: FeePayment; receipt: FeeReceipt }>('/fees/payments', payload)
+    const { data, error } = await api.post<{ payment: Record<string, unknown>; receipt: Record<string, unknown> }>('/fees/payments', payload)
     if (error || !data) return { payment: null, receipt: null, error: error || 'Failed to record payment' }
-    return { payment: data.payment, receipt: data.receipt }
+    return {
+      payment: data.payment ? normalizeFeePayment(data.payment) : null,
+      receipt: data.receipt ? normalizeFeeReceipt(data.receipt) : null,
+    }
   },
 
   async reversePayment(id: string, reason: string): Promise<{ payment: FeePayment | null; error?: string }> {
-    const { data, error } = await api.post<FeePayment>(`/fees/payments/${id}/reverse`, { reason })
+    const { data, error } = await api.post<Record<string, unknown>>(`/fees/payments/${id}/reverse`, { reason })
     if (error || !data) return { payment: null, error: error || 'Failed to reverse payment' }
-    return { payment: data }
+    return { payment: normalizeFeePayment(data) }
   },
 
   async refundPayment(id: string, reason: string): Promise<{ payment: FeePayment | null; error?: string }> {
-    const { data, error } = await api.post<FeePayment>(`/fees/payments/${id}/refund`, { reason })
+    const { data, error } = await api.post<Record<string, unknown>>(`/fees/payments/${id}/refund`, { reason })
     if (error || !data) return { payment: null, error: error || 'Failed to refund payment' }
-    return { payment: data }
+    return { payment: normalizeFeePayment(data) }
   },
 
   // ── Receipts ─────────────────────────────────────────────────────────────────
   async getReceipts(params: { page?: number; limit?: number; studentId?: string; invoiceId?: string; paymentId?: string; isVoided?: boolean } = {}): Promise<Paginated<FeeReceipt>> {
-    const { data, error } = await api.get<Paginated<FeeReceipt>>(`/fees/receipts${buildQS(params)}`)
+    const { data, error } = await api.get<unknown>(`/fees/receipts${buildQS(params)}`)
     if (error) throw new Error(error)
-    return toPaginated(data)
+    const paginated = toPaginated<Record<string, unknown>>(data)
+    return { ...paginated, data: paginated.data.map(normalizeFeeReceipt) }
   },
 
   async getReceiptById(id: string): Promise<FeeReceipt | null> {
-    const { data } = await api.get<FeeReceipt>(`/fees/receipts/${id}`)
-    return data || null
+    const { data } = await api.get<Record<string, unknown>>(`/fees/receipts/${id}`)
+    return data ? normalizeFeeReceipt(data) : null
   },
 
   async getReceiptPrintData(id: string): Promise<ReceiptPrintData | null> {
@@ -532,9 +617,9 @@ export const feeService = {
   },
 
   async voidReceipt(id: string, reason: string): Promise<{ receipt: FeeReceipt | null; error?: string }> {
-    const { data, error } = await api.post<FeeReceipt>(`/fees/receipts/${id}/void`, { reason })
+    const { data, error } = await api.post<Record<string, unknown>>(`/fees/receipts/${id}/void`, { reason })
     if (error || !data) return { receipt: null, error: error || 'Failed to void receipt' }
-    return { receipt: data }
+    return { receipt: normalizeFeeReceipt(data) }
   },
 
   // ── Discounts ────────────────────────────────────────────────────────────────
@@ -586,19 +671,29 @@ export const feeService = {
 
   // ── Overdue ──────────────────────────────────────────────────────────────────
   async getOverdueInvoices(params: { page?: number; limit?: number; classId?: string; academicYear?: string } = {}): Promise<Paginated<FeeInvoice>> {
-    const { data, error } = await api.get<Paginated<FeeInvoice>>(`/fees/overdue${buildQS(params)}`)
+    const { data, error } = await api.get<unknown>(`/fees/overdue${buildQS(params)}`)
     if (error) throw new Error(error)
-    return toPaginated(data)
+    const paginated = toPaginated<Record<string, unknown>>(data)
+    return { ...paginated, data: paginated.data.map(normalizeFeeInvoice) }
   },
 
-  async getDefaulters(params: { classId?: string; academicYear?: string } = {}): Promise<unknown> {
-    const { data } = await api.get(`/fees/overdue/defaulters${buildQS(params)}`)
-    return data
+  async getDefaulters(params: { classId?: string; academicYear?: string } = {}): Promise<Record<string, unknown>[]> {
+    const { data, error } = await api.get<unknown>(`/fees/overdue/defaulters${buildQS(params)}`)
+    if (error) throw new Error(error)
+    const list = Array.isArray(data) ? data : (data as { data?: unknown[] } | null)?.data ?? []
+    return list as Record<string, unknown>[]
   },
 
-  async applyLateFees(): Promise<{ processed: number; applied: number; skipped: number } | null> {
-    const { data } = await api.post<{ processed: number; applied: number; skipped: number }>('/fees/overdue/apply-late-fees', {})
-    return data || null
+  async applyLateFees(): Promise<{ data: { processed: number; applied: number; skipped: number } | null; error?: string }> {
+    const { data, error } = await api.post<Record<string, unknown>>('/fees/overdue/apply-late-fees', {})
+    if (error || !data) return { data: null, error: error || 'Failed to apply late fees' }
+    return {
+      data: {
+        processed: Number(data.processed ?? 0),
+        applied: Number(data.applied ?? 0),
+        skipped: Number(data.skipped ?? 0),
+      },
+    }
   },
 
   async sendReminders(): Promise<{ queued: number } | null> {
@@ -633,7 +728,7 @@ export const feeService = {
       },
       feeAssignment: rawFeeAssignment ? normalizeStudentFeeAssignment(rawFeeAssignment as Record<string, unknown>) : undefined,
       invoices: toArray<Record<string, unknown>>(data.invoices).map(normalizeFeeInvoice),
-      payments: toArray(data.payments),
+      payments: toArray<Record<string, unknown>>(data.payments).map(normalizeFeePayment),
       discounts: toArray<Record<string, unknown>>(data.discounts).map(normalizeFeeDiscount),
       summary: {
         totalInvoiced: (rawSummary.total_invoiced ?? rawSummary.totalInvoiced) as string,
@@ -722,23 +817,21 @@ export const feeService = {
 
   // ── Settings ─────────────────────────────────────────────────────────────────
   async getSettings(): Promise<FeeSettings | null> {
-    const { data } = await api.get<FeeSettings>('/fees/settings')
-    return data || null
+    const { data, error } = await api.get<Record<string, unknown>>('/fees/settings')
+    if (error) throw new Error(error)
+    return data ? normalizeFeeSettings(data) : null
   },
 
-  async updateSettings(payload: Partial<Omit<FeeSettings, 'tenantId' | 'lateFeeRule'>>): Promise<boolean> {
-    const { error } = await api.put('/fees/settings', payload)
-    return !error
+  // Create/update are the same endpoint — POST /fees/settings upserts the full document.
+  async saveSettings(payload: SaveFeeSettingsRequest): Promise<{ data: FeeSettings | null; error?: string }> {
+    const { data, error } = await api.post<Record<string, unknown>>('/fees/settings', payload)
+    if (error || !data) return { data: null, error: error || 'Failed to save fee settings' }
+    return { data: normalizeFeeSettings(data) }
   },
 
-  async getLateFeeRule(): Promise<LateFeeRule | null> {
-    const { data } = await api.get<LateFeeRule>('/fees/settings/late-fee')
-    return data || null
-  },
-
-  async updateLateFeeRule(payload: LateFeeRule): Promise<boolean> {
-    const { error } = await api.put('/fees/settings/late-fee', payload)
-    return !error
+  async getLateFeeSettings(): Promise<Partial<FeeSettings> | null> {
+    const { data } = await api.get<Record<string, unknown>>('/fees/settings/late-fee')
+    return data ? normalizeFeeSettings(data) : null
   },
 
   // ── Finance Mapping ───────────────────────────────────────────────────────────

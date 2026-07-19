@@ -10,7 +10,7 @@ import { inventoryService } from '@/lib/services/inventory'
 import {
   Package, Tags, MapPin, Boxes, ClipboardList, Settings2, Truck, PackageMinus,
 } from 'lucide-react'
-import { TablePageSkeleton } from '@/components/ui/page-skeleton'
+import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
 
 export default function InventoryOverviewPage() {
   const { can } = useAuth()
@@ -56,7 +56,7 @@ export default function InventoryOverviewPage() {
 
   useEffect(() => { loadStats() }, [loadStats])
 
-  if (isLoading) return <TablePageSkeleton />
+  if (isLoading) return <OverviewPageSkeleton />
 
   const quickLinks = [
     { href: '/dashboard/inventory/items', label: 'Manage Items', description: 'The item catalogue — add, edit, retire', icon: Package },

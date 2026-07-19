@@ -19,7 +19,7 @@ import {
 import { Combobox } from '@/components/ui/combobox'
 import { inventoryService, type InventoryLocation } from '@/lib/services/inventory'
 import { Plus, Edit, Trash2, Loader2, RefreshCw, MapPin, ChevronRight, ChevronDown } from 'lucide-react'
-import { OverviewPageSkeleton } from '@/components/ui/page-skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const NONE = '__none__'
 const EMPTY_FORM = { name: '', kind: '', parentId: '' }
@@ -191,8 +191,6 @@ export default function InventoryLocationsPage() {
     loadData()
   }
 
-  if (isLoading) return <OverviewPageSkeleton />
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -218,7 +216,21 @@ export default function InventoryLocationsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {tree.length === 0 ? (
+          {isLoading ? (
+            <div className="space-y-1">
+              {Array.from({ length: 10 }).map((_, i) => {
+                const depth = [0, 1, 1, 2, 2, 0, 1, 2, 1, 0][i]
+                return (
+                  <div key={i} className="flex items-center gap-3 py-2" style={{ paddingLeft: depth * 24 }}>
+                    <Skeleton className="h-4 w-4 rounded-sm flex-shrink-0" />
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-5 w-16 rounded-full ml-auto" />
+                    <Skeleton className="h-7 w-7" />
+                  </div>
+                )
+              })}
+            </div>
+          ) : tree.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <MapPin className="h-10 w-10 mx-auto mb-2 opacity-30" />
               No locations defined yet

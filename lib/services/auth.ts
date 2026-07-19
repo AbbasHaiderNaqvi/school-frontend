@@ -77,6 +77,7 @@ function mapApiUserToUser(apiUser: ApiLoginResponse['user'], tenantId: string): 
     id: apiUser.id,
     email: apiUser.email,
     name: apiUser.fullName,
+    phone: apiUser.phone,
     role: mapApiRoleToUserRole(apiUser.role),
     tenantId: tenantId || null,
     linkedId: apiUser.employeeId ?? apiUser.studentId ?? apiUser.parentId ?? undefined,
@@ -89,6 +90,39 @@ function mapApiUserToUser(apiUser: ApiLoginResponse['user'], tenantId: string): 
 const SESSION_KEY = 'mudir_session'
 
 export const authService = {
+  // Invite/reset flow: the emailed link carries a one-time token; no auth header needed.
+  async setPassword(token: string, password: string): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.post('/auth/set-password', { token, password })
+    if (error) return { success: false, error }
+    return { success: true }
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.post('/auth/change-password', { currentPassword, newPassword })
+    if (error) return { success: false, error }
+    return { success: true }
+  },
+
+  // PATCH /auth/me — updates the signed-in user's own name/phone, then syncs
+  // the locally stored session so the sidebar/header reflect it immediately.
+  async updateProfile(payload: { fullName?: string; phone?: string }): Promise<{ success: boolean; error?: string }> {
+    const { error } = await api.patch('/auth/me', payload)
+    if (error) return { success: false, error }
+    const currentUser = this.getCurrentUser()
+    if (currentUser) {
+      const updatedUser = {
+        ...currentUser,
+        ...(payload.fullName !== undefined ? { name: payload.fullName } : {}),
+        ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
+        updatedAt: new Date().toISOString(),
+      }
+      storage.set(STORAGE_KEYS.CURRENT_USER, updatedUser)
+      const session = this.getSession()
+      if (session) storage.set(SESSION_KEY, { ...session, user: updatedUser })
+    }
+    return { success: true }
+  },
+
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     // --- Real API login ---
     const tenantSlug = getTenantSlug()
