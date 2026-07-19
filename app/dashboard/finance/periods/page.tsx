@@ -165,7 +165,7 @@ export default function FiscalPeriodsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {closed
-                        ? can('finance.period.reopen') && (
+                        ? can('finance.period.close') && (
                             <Button variant="outline" size="sm" onClick={() => handleReopen(p)} disabled={actionLoadingId === p.id}>
                               {actionLoadingId === p.id ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <LockOpen className="h-3.5 w-3.5 mr-1.5" />}
                               Reopen

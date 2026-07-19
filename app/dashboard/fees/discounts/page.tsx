@@ -91,10 +91,9 @@ function blankBulkForm(): BulkFormState {
 
 export default function DiscountsPage() {
   const { can } = useAuth()
-  // "Required permission: fees:discount:create" was given in colon form, but
-  // every other confirmed permission in this app uses dots (e.g.
-  // users.user.deactivate) — check both so this doesn't silently hide again.
-  const canDiscount = (action: string) => can(`fees.discount.${action}`) || can(`fees:discount:${action}`)
+  // Real catalog: fees.discount.{read,create,update,approve,reject} — there is
+  // no .delete key, so delete is gated by the manage-level update key.
+  const canDiscount = (action: string) => can(`fees.discount.${action === 'delete' ? 'update' : action}`)
 
   const [discounts, setDiscounts] = useState<FeeDiscount[]>([])
   const [isLoading, setIsLoading] = useState(true)

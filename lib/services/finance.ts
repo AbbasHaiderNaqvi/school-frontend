@@ -150,6 +150,52 @@ export interface ExpenseApprovalHistoryEntry {
   [key: string]: unknown
 }
 
+export interface Vendor {
+  id: string
+  name: string
+  code: string
+  contactPerson?: string | null
+  phone?: string | null
+  email?: string | null
+  address?: string | null
+  paymentTermsDays?: number | null
+  notes?: string | null
+  isActive?: boolean
+  createdAt?: string
+  [key: string]: unknown
+}
+
+export interface CreateVendorRequest {
+  name: string
+  code: string
+  contactPerson?: string
+  phone?: string
+  email?: string
+  address?: string
+  paymentTermsDays?: number
+  notes?: string
+}
+
+// Vendor response casing unconfirmed — normalize both, like the other services.
+function normalizeVendor(raw: Record<string, unknown>): Vendor {
+  return {
+    ...raw,
+    id: raw.id as string,
+    name: raw.name as string,
+    code: raw.code as string,
+    contactPerson: (raw.contactPerson ?? raw.contact_person) as string | null | undefined,
+    phone: raw.phone as string | null | undefined,
+    email: raw.email as string | null | undefined,
+    address: raw.address as string | null | undefined,
+    paymentTermsDays: (raw.paymentTermsDays ?? raw.payment_terms_days) != null
+      ? Number(raw.paymentTermsDays ?? raw.payment_terms_days)
+      : undefined,
+    notes: raw.notes as string | null | undefined,
+    isActive: (raw.isActive ?? raw.is_active) as boolean | undefined,
+    createdAt: (raw.createdAt ?? raw.created_at) as string | undefined,
+  }
+}
+
 export type BudgetChangeRequestStatus = 'DRAFT' | 'SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED'
 
 export interface BudgetChangeRequest {
@@ -428,5 +474,39 @@ export const financeService = {
   async getVendorsDropdown(): Promise<Array<{ id: string; name: string; code: string }>> {
     const { data } = await api.get<Array<{ id: string; name: string; code: string }>>('/finance/vendors/dropdown')
     return toArray(data)
+  },
+
+  async getVendors(params: { page?: number; limit?: number; search?: string } = {}): Promise<Paginated<Vendor>> {
+    const q = new URLSearchParams()
+    if (params.page) q.set('page', String(params.page))
+    if (params.limit) q.set('limit', String(params.limit))
+    if (params.search) q.set('search', params.search)
+    const qs = q.toString()
+    const { data, error } = await api.get<unknown>(`/finance/vendors${qs ? `?${qs}` : ''}`)
+    if (error) throw new Error(error)
+    const page = toPaginated<Record<string, unknown>>(data)
+    return { ...page, data: page.data.map(normalizeVendor) }
+  },
+
+  async getVendor(id: string): Promise<Vendor | null> {
+    const { data } = await api.get<Record<string, unknown>>(`/finance/vendors/${id}`)
+    return data ? normalizeVendor(data) : null
+  },
+
+  async createVendor(payload: CreateVendorRequest): Promise<{ vendor: Vendor | null; error?: string }> {
+    const { data, error } = await api.post<Record<string, unknown>>('/finance/vendors', payload)
+    if (error || !data) return { vendor: null, error: error || 'Failed to create vendor' }
+    return { vendor: normalizeVendor(data) }
+  },
+
+  async updateVendor(id: string, payload: Partial<CreateVendorRequest>): Promise<{ vendor: Vendor | null; error?: string }> {
+    const { data, error } = await api.patch<Record<string, unknown>>(`/finance/vendors/${id}`, payload)
+    if (error || !data) return { vendor: null, error: error || 'Failed to update vendor' }
+    return { vendor: normalizeVendor(data) }
+  },
+
+  async deleteVendor(id: string): Promise<{ error?: string }> {
+    const { error } = await api.delete(`/finance/vendors/${id}`)
+    return { error: error || undefined }
   },
 }

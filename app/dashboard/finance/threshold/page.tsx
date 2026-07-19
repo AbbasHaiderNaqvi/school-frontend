@@ -27,7 +27,7 @@ function fmt(val: string | number | undefined): string {
 }
 
 export default function ThresholdManagementPage() {
-  const { user } = useAuth()
+  const { can } = useAuth()
   const [settings, setSettings] = useState<ExpenseApprovalSettings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -39,7 +39,8 @@ export default function ThresholdManagementPage() {
   const [history, setHistory] = useState<ExpenseApprovalHistoryEntry[]>([])
   const [isHistoryLoading, setIsHistoryLoading] = useState(true)
 
-  const canManageThreshold = user?.role === 'tenant_owner' || user?.role === 'tenant_admin' || user?.role === 'tenant_principal'
+  const canRead = can('finance.expense_approval.read')
+  const canUpdate = can('finance.expense_approval.update')
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true)
@@ -91,7 +92,7 @@ export default function ThresholdManagementPage() {
     setIsUpdating(false)
   }
 
-  if (!canManageThreshold) {
+  if (!canRead) {
     return (
       <div className="space-y-6">
         <div>
@@ -142,9 +143,11 @@ export default function ThresholdManagementPage() {
                     : 'Expense approval workflow is currently disabled'}
                 </p>
               </div>
-              <Button onClick={() => { setFieldErrors({}); setError(''); setIsDialogOpen(true) }}>
-                <Save className="h-4 w-4 mr-2" /> Update Settings
-              </Button>
+              {canUpdate && (
+                <Button onClick={() => { setFieldErrors({}); setError(''); setIsDialogOpen(true) }}>
+                  <Save className="h-4 w-4 mr-2" /> Update Settings
+                </Button>
+              )}
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">No expense approval settings found. Click Update Settings to configure.</p>

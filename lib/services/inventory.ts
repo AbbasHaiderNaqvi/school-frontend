@@ -123,13 +123,14 @@ export interface InventoryItemRecord {
   [key: string]: unknown
 }
 
+// NOTE: POST /inventory/items rejects minStockLevel/reorderLevel with
+// VALIDATION_ERROR ("property should not exist") — confirmed from a real
+// response, so they are deliberately absent here.
 export interface CreateItemRequest {
   name: string
   categoryId: string
   unitId: string
   trackExpiry: boolean
-  minStockLevel?: number
-  reorderLevel?: number
   barcode?: string
   assetTag?: string
   description?: string
@@ -148,20 +149,44 @@ export interface CreateGrnRequest {
   type: GrnType
   vendorId?: string
   date: string
-  reference?: string
   lines: GrnLine[]
 }
 
+// Confirmed shape of GET /inventory/grns: grnNo, sourceType, vendorName,
+// receivedDate, totalValue, journalEntryId (flat, camelCase). Lines only
+// appear on the detail endpoint.
 export interface Grn {
   id: string
-  number: string
-  type: GrnType
+  grnNo: string
+  sourceType: GrnType
   vendorId?: string | null
-  vendor?: { id: string; name: string } | null
-  date: string
-  lines: Array<GrnLine & { id: string; itemName?: string; locationPath?: string }>
+  vendorName?: string | null
+  vendorBillId?: string | null
+  receivedDate: string
+  totalValue?: string
+  journalEntryId?: string | null
+  lines?: Array<GrnLine & { id?: string; itemName?: string; locationPath?: string }>
   createdAt?: string
   [key: string]: unknown
+}
+
+function normalizeGrn(raw: Record<string, unknown>): Grn {
+  return {
+    ...raw,
+    id: raw.id as string,
+    grnNo: (raw.grnNo ?? raw.grn_no ?? raw.number) as string,
+    sourceType: (raw.sourceType ?? raw.source_type ?? raw.type) as GrnType,
+    vendorId: (raw.vendorId ?? raw.vendor_id) as string | null | undefined,
+    vendorName: (raw.vendorName ?? raw.vendor_name ?? (raw.vendor as { name?: string } | null)?.name) as string | null | undefined,
+    vendorBillId: (raw.vendorBillId ?? raw.vendor_bill_id) as string | null | undefined,
+    receivedDate: (raw.receivedDate ?? raw.received_date ?? raw.date) as string,
+    totalValue: (raw.totalValue ?? raw.total_value) as string | undefined,
+    journalEntryId: (raw.journalEntryId ?? raw.journal_entry_id) as string | null | undefined,
+    lines: Array.isArray(raw.lines)
+      ? (raw.lines as Record<string, unknown>[]).map(l => ({ ...l, quantity: (l.quantity ?? l.qty) as number })) as Grn['lines']
+      : undefined,
+    createdAt: (raw.createdAt ?? raw.created_at) as string | undefined,
+  }
 }
 
 export interface IssueLine {
@@ -184,17 +209,41 @@ export interface ReturnIssueRequest {
   lines: Array<{ issueLineId: string; quantity: number }>
 }
 
+// Confirmed shape of GET /inventory/issues: issueNo, targetKind, targetName,
+// purpose, issueDate, totalValue, journalEntryId (flat, camelCase). Lines only
+// appear on the detail endpoint.
 export interface Issue {
   id: string
-  number: string
-  targetType: IssueTargetType
+  issueNo: string
+  targetKind: IssueTargetType
   targetId?: string | null
   targetName?: string | null
   purpose: string
-  date: string
-  lines: Array<IssueLine & { id: string; itemName?: string; locationPath?: string; returnedQty?: number }>
+  issueDate: string
+  totalValue?: string
+  journalEntryId?: string | null
+  lines?: Array<IssueLine & { id?: string; itemName?: string; locationPath?: string; returnedQty?: number }>
   createdAt?: string
   [key: string]: unknown
+}
+
+function normalizeIssue(raw: Record<string, unknown>): Issue {
+  return {
+    ...raw,
+    id: raw.id as string,
+    issueNo: (raw.issueNo ?? raw.issue_no ?? raw.number) as string,
+    targetKind: (raw.targetKind ?? raw.target_kind ?? raw.targetType ?? raw.target_type) as IssueTargetType,
+    targetId: (raw.targetId ?? raw.target_id) as string | null | undefined,
+    targetName: (raw.targetName ?? raw.target_name) as string | null | undefined,
+    purpose: raw.purpose as string,
+    issueDate: (raw.issueDate ?? raw.issue_date ?? raw.date) as string,
+    totalValue: (raw.totalValue ?? raw.total_value) as string | undefined,
+    journalEntryId: (raw.journalEntryId ?? raw.journal_entry_id) as string | null | undefined,
+    lines: Array.isArray(raw.lines)
+      ? (raw.lines as Record<string, unknown>[]).map(l => ({ ...l, quantity: (l.quantity ?? l.qty) as number, returnedQty: (l.returnedQty ?? l.returned_qty) as number | undefined })) as Issue['lines']
+      : undefined,
+    createdAt: (raw.createdAt ?? raw.created_at) as string | undefined,
+  }
 }
 
 export interface CreateTransferRequest {
@@ -467,35 +516,68 @@ export const inventoryService = {
   // GRNs (stock-in)
   async getGrns(params: ListParams & { type?: GrnType } = {}): Promise<Paginated<Grn>> {
     const { data } = await api.get(`/inventory/grns${buildQuery(params)}`)
-    return toPaginated<Grn>(data)
+    const page = toPaginated<Record<string, unknown>>(data)
+    return { ...page, data: page.data.map(normalizeGrn) }
   },
 
   async getGrn(id: string): Promise<Grn | null> {
-    const { data } = await api.get<Grn>(`/inventory/grns/${id}`)
-    return data
+    const { data } = await api.get<Record<string, unknown>>(`/inventory/grns/${id}`)
+    return data ? normalizeGrn(data) : null
   },
 
+  // Wire format confirmed from real VALIDATION_ERROR responses: the API wants
+  // sourceType / receivedDate / lines[].qty (whitelist validation — unknown
+  // properties are rejected outright).
   async createGrn(payload: CreateGrnRequest): Promise<{ data: Grn | null; error?: string }> {
-    const { data, error } = await api.post<Grn>('/inventory/grns', payload)
+    const wire = {
+      sourceType: payload.type,
+      ...(payload.vendorId ? { vendorId: payload.vendorId } : {}),
+      receivedDate: payload.date,
+      lines: payload.lines.map(l => ({
+        itemId: l.itemId,
+        qty: l.quantity,
+        unitCost: l.unitCost,
+        locationId: l.locationId,
+        condition: l.condition,
+        ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
+      })),
+    }
+    const { data, error } = await api.post<Record<string, unknown>>('/inventory/grns', wire)
     if (error || !data) return { data: null, error: error || 'Failed to create GRN' }
-    return { data }
+    return { data: normalizeGrn(data) }
   },
 
   // Issues (stock-out)
   async getIssues(params: ListParams & { targetType?: IssueTargetType } = {}): Promise<Paginated<Issue>> {
     const { data } = await api.get(`/inventory/issues${buildQuery(params)}`)
-    return toPaginated<Issue>(data)
+    const page = toPaginated<Record<string, unknown>>(data)
+    return { ...page, data: page.data.map(normalizeIssue) }
   },
 
   async getIssue(id: string): Promise<Issue | null> {
-    const { data } = await api.get<Issue>(`/inventory/issues/${id}`)
-    return data
+    const { data } = await api.get<Record<string, unknown>>(`/inventory/issues/${id}`)
+    return data ? normalizeIssue(data) : null
   },
 
+  // Wire format confirmed from a real VALIDATION_ERROR response:
+  // targetKind / issueDate / lines[].qty.
   async createIssue(payload: CreateIssueRequest): Promise<{ data: Issue | null; error?: string }> {
-    const { data, error } = await api.post<Issue>('/inventory/issues', payload)
+    const wire = {
+      targetKind: payload.targetType,
+      ...(payload.targetId ? { targetId: payload.targetId } : {}),
+      ...(payload.targetName ? { targetName: payload.targetName } : {}),
+      purpose: payload.purpose,
+      issueDate: payload.date,
+      lines: payload.lines.map(l => ({
+        itemId: l.itemId,
+        qty: l.quantity,
+        locationId: l.locationId,
+        condition: l.condition,
+      })),
+    }
+    const { data, error } = await api.post<Record<string, unknown>>('/inventory/issues', wire)
     if (error || !data) return { data: null, error: error || 'Failed to create issue' }
-    return { data }
+    return { data: normalizeIssue(data) }
   },
 
   async returnIssue(id: string, payload: ReturnIssueRequest): Promise<{ data: Issue | null; error?: string }> {
@@ -510,10 +592,30 @@ export const inventoryService = {
     return toPaginated<Transfer>(data)
   },
 
+  // The API takes ONE item per transfer ({ itemId, qty, fromLocationId,
+  // toLocationId, condition } — no lines/date; confirmed from a real
+  // VALIDATION_ERROR response). The form allows several rows, so each row is
+  // posted as its own transfer, stopping at the first failure.
   async createTransfer(payload: CreateTransferRequest): Promise<{ data: Transfer | null; error?: string }> {
-    const { data, error } = await api.post<Transfer>('/inventory/transfers', payload)
-    if (error || !data) return { data: null, error: error || 'Failed to create transfer' }
-    return { data }
+    let last: Transfer | null = null
+    for (let i = 0; i < payload.lines.length; i++) {
+      const l = payload.lines[i]
+      const wire = {
+        itemId: l.itemId,
+        qty: l.quantity,
+        fromLocationId: payload.fromLocationId,
+        toLocationId: payload.toLocationId,
+        condition: l.condition,
+        ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
+      }
+      const { data, error } = await api.post<Transfer>('/inventory/transfers', wire)
+      if (error || !data) {
+        const prefix = i > 0 ? `${i} of ${payload.lines.length} lines transferred before this failure. ` : ''
+        return { data: last, error: `${prefix}Line ${i + 1}: ${error || 'Failed to create transfer'}` }
+      }
+      last = data
+    }
+    return { data: last }
   },
 
   // Condition changes

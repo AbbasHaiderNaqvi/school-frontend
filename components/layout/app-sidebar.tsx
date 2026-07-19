@@ -101,6 +101,7 @@ const navItems: NavItem[] = [
       { title: 'Transaction Flow', href: '/dashboard/finance/transactions-flow', icon: Wallet, roles: ['tenant_accountant', 'tenant_admin', 'tenant_principal'] },
       { title: 'Expenses', href: '/dashboard/finance/expenses', icon: Wallet, roles: ['tenant_accountant', 'tenant_admin', 'tenant_principal'] },
       { title: 'Budgets', href: '/dashboard/finance/budgets', icon: Briefcase, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner'] },
+      { title: 'Vendors', href: '/dashboard/finance/vendors', icon: Truck, roles: ['tenant_accountant', 'tenant_admin', 'tenant_owner'] },
       { title: 'Expense Approvals', href: '/dashboard/finance/expense-approvals', icon: CheckCircle2, roles: ['tenant_owner', 'tenant_principal'] },
       { title: 'Approval Threshold', href: '/dashboard/finance/threshold', icon: DollarSign, roles: ['tenant_owner', 'super_admin'] },
     ],

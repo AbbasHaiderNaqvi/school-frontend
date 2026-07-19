@@ -365,7 +365,7 @@ export default function BudgetsPage() {
                                 <Edit className="mr-2 h-4 w-4" /> Edit Name / Status
                               </DropdownMenuItem>
                             )}
-                            {can('finance.budget.create') && b.status === 'ACTIVE' && (
+                            {can('finance.budget_change_request.create') && b.status === 'ACTIVE' && (
                               <DropdownMenuItem onClick={() => openRequestChange(b)}>
                                 <GitPullRequestArrow className="mr-2 h-4 w-4" /> Request Allocation Change
                               </DropdownMenuItem>
@@ -436,22 +436,26 @@ export default function BudgetsPage() {
                           <TableCell>
                             <div className="flex justify-end gap-1">
                               {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mt-2" />}
-                              {!busy && status === 'DRAFT' && (
+                              {!busy && status === 'DRAFT' && can('finance.budget_change_request.create') && (
                                 <Button variant="outline" size="sm" onClick={() => handleCrAction(cr, 'submit')}>
                                   <Send className="h-3.5 w-3.5 mr-1.5" /> Submit
                                 </Button>
                               )}
                               {!busy && (status === 'SUBMITTED' || status === 'PENDING' || status === 'PENDING_APPROVAL') && (
                                 <>
-                                  <Button variant="outline" size="sm" onClick={() => handleCrAction(cr, 'approve')}>
-                                    <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-600" /> Approve
-                                  </Button>
-                                  <Button variant="outline" size="sm" onClick={() => handleCrAction(cr, 'reject')}>
-                                    <X className="h-3.5 w-3.5 mr-1.5 text-destructive" /> Reject
-                                  </Button>
+                                  {can('finance.budget_change_request.approve') && (
+                                    <Button variant="outline" size="sm" onClick={() => handleCrAction(cr, 'approve')}>
+                                      <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-600" /> Approve
+                                    </Button>
+                                  )}
+                                  {can('finance.budget_change_request.reject') && (
+                                    <Button variant="outline" size="sm" onClick={() => handleCrAction(cr, 'reject')}>
+                                      <X className="h-3.5 w-3.5 mr-1.5 text-destructive" /> Reject
+                                    </Button>
+                                  )}
                                 </>
                               )}
-                              {!busy && status === 'APPROVED' && (
+                              {!busy && status === 'APPROVED' && can('finance.budget_change_request.apply') && (
                                 <Button size="sm" onClick={() => handleCrAction(cr, 'apply')}>
                                   <PlayCircle className="h-3.5 w-3.5 mr-1.5" /> Apply
                                 </Button>

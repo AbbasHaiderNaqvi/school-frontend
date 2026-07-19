@@ -63,9 +63,12 @@ function blankTypeForm(): TypeFormState {
 
 export default function LeavesPage() {
   const { can, user } = useAuth()
+  // Real permission catalog (login response): hr.leave_type.* plus
+  // hr.leave.{read,create,approve,cancel}. Reject shares the approve key
+  // (one review endpoint) and balances use read; allocate uses create.
   const canLeaveType = (action: string) => can(`hr.leave_type.${action}`)
-  const canLeaveApplication = (action: string) => can(`hr.leave_application.${action}`)
-  const canLeaveBalance = (action: string) => can(`hr.leave_balance.${action}`)
+  const canLeaveApplication = (action: string) => can(`hr.leave.${action === 'reject' ? 'approve' : action}`)
+  const canLeaveBalance = (action: string) => can(action === 'allocate' ? 'hr.leave.create' : 'hr.leave.read')
 
   const [activeTab, setActiveTab] = useState('applications')
   const [employees, setEmployees] = useState<Employee[]>([])

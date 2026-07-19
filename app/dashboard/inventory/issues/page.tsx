@@ -1,5 +1,7 @@
 'use client'
 
+import { money } from '@/lib/currency'
+
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
@@ -226,8 +228,8 @@ export default function IssuesPage() {
                 <TableHead>Number</TableHead>
                 <TableHead>Target</TableHead>
                 <TableHead>Purpose</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Lines</TableHead>
+                <TableHead>Issue Date</TableHead>
+                <TableHead className="text-right">Total Value</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -246,14 +248,14 @@ export default function IssuesPage() {
                   )}
                   {issues.map(issue => (
                     <TableRow key={issue.id}>
-                      <TableCell><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{issue.number}</span></TableCell>
+                      <TableCell><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{issue.issueNo}</span></TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{issue.targetType}</Badge>{' '}
+                        <Badge variant="secondary">{issue.targetKind}</Badge>{' '}
                         <span className="text-sm text-muted-foreground">{issue.targetName ?? issue.targetId}</span>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">{issue.purpose}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{new Date(issue.date).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-muted-foreground">{issue.lines?.length ?? 0}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{issue.issueDate}</TableCell>
+                      <TableCell className="text-right font-medium">{issue.totalValue != null ? money(issue.totalValue) : '—'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="icon" onClick={() => openView(issue)}><Eye className="h-4 w-4" /></Button>
@@ -431,8 +433,11 @@ export default function IssuesPage() {
       <Dialog open={!!viewing} onOpenChange={open => !open && setViewing(null)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Issue {viewing?.number}</DialogTitle>
-            <DialogDescription>{viewing?.purpose} · {viewing && new Date(viewing.date).toLocaleDateString()}</DialogDescription>
+            <DialogTitle>Issue {viewing?.issueNo}</DialogTitle>
+            <DialogDescription>
+              {viewing?.purpose} · {viewing?.issueDate}
+              {viewing?.totalValue != null ? ` · ${money(viewing.totalValue)}` : ''}
+            </DialogDescription>
           </DialogHeader>
           {isViewLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
@@ -467,7 +472,7 @@ export default function IssuesPage() {
       <Dialog open={!!returning} onOpenChange={open => !open && setReturning(null)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Return Stock — Issue {returning?.number}</DialogTitle>
+            <DialogTitle>Return Stock — Issue {returning?.issueNo}</DialogTitle>
             <DialogDescription>Enter the quantity being returned per line (up to the issued amount, minus any already returned)</DialogDescription>
           </DialogHeader>
           {returnError && <Alert variant="destructive"><AlertDescription>{returnError}</AlertDescription></Alert>}
@@ -481,21 +486,24 @@ export default function IssuesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {returning?.lines?.map(l => (
-                <TableRow key={l.id}>
+              {returning?.lines?.filter(l => l.id).map(l => {
+                const lineId = l.id as string
+                return (
+                <TableRow key={lineId}>
                   <TableCell>{l.itemName ?? l.itemId}</TableCell>
                   <TableCell>{l.quantity}</TableCell>
                   <TableCell>{l.returnedQty ?? 0}</TableCell>
                   <TableCell>
                     <Input
                       type="number"
-                      value={returnQtys[l.id] ?? ''}
-                      onChange={e => setReturnQtys(prev => ({ ...prev, [l.id]: e.target.value }))}
+                      value={returnQtys[lineId] ?? ''}
+                      onChange={e => setReturnQtys(prev => ({ ...prev, [lineId]: e.target.value }))}
                       max={l.quantity - (l.returnedQty ?? 0)}
                     />
                   </TableCell>
                 </TableRow>
-              ))}
+                )
+              })}
             </TableBody>
           </Table>
           <DialogFooter>

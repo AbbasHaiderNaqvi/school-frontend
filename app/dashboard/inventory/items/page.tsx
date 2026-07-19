@@ -34,7 +34,7 @@ import { SkeletonTableRows } from '@/components/ui/page-skeleton'
 const ALL = '__all__'
 const EMPTY_FORM = {
   name: '', categoryId: '', unitId: '', trackExpiry: false,
-  minStockLevel: '', reorderLevel: '', barcode: '', assetTag: '', description: '',
+  barcode: '', assetTag: '', description: '',
 }
 
 export default function InventoryItemsPage() {
@@ -107,8 +107,6 @@ export default function InventoryItemsPage() {
       categoryId: item.categoryId ?? item.category?.id ?? '',
       unitId: item.unitId ?? item.unit?.id ?? '',
       trackExpiry: item.trackExpiry,
-      minStockLevel: item.minStockLevel != null ? String(item.minStockLevel) : '',
-      reorderLevel: item.reorderLevel != null ? String(item.reorderLevel) : '',
       barcode: item.barcode ?? '',
       assetTag: item.assetTag ?? '',
       description: item.description ?? '',
@@ -120,10 +118,6 @@ export default function InventoryItemsPage() {
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {}
-    const minStockErr = numberError(form.minStockLevel, { min: 0, label: 'Minimum stock level' })
-    if (minStockErr) errors.minStockLevel = minStockErr
-    const reorderErr = numberError(form.reorderLevel, { min: 0, label: 'Reorder level' })
-    if (reorderErr) errors.reorderLevel = reorderErr
     setFieldErrors(errors)
     return hasNoErrors(errors)
   }
@@ -138,8 +132,6 @@ export default function InventoryItemsPage() {
       categoryId: form.categoryId,
       unitId: form.unitId,
       trackExpiry: form.trackExpiry,
-      minStockLevel: form.minStockLevel ? Number(form.minStockLevel) : undefined,
-      reorderLevel: form.reorderLevel ? Number(form.reorderLevel) : undefined,
       barcode: form.barcode.trim() || undefined,
       assetTag: form.assetTag.trim() || undefined,
       description: form.description.trim() || undefined,
@@ -231,7 +223,7 @@ export default function InventoryItemsPage() {
                 <TableHead>Category</TableHead>
                 <TableHead>Unit</TableHead>
                 <TableHead>Expiry Tracked</TableHead>
-                <TableHead>Reorder Level</TableHead>
+                <TableHead>Barcode</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -259,7 +251,7 @@ export default function InventoryItemsPage() {
                       <TableCell>
                         <Badge variant={item.trackExpiry ? 'default' : 'secondary'}>{item.trackExpiry ? 'Yes' : 'No'}</Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{item.reorderLevel ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground font-mono text-xs">{item.barcode ?? '—'}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -337,30 +329,6 @@ export default function InventoryItemsPage() {
                   emptyText="No units found."
                   className="mt-1"
                 />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Minimum Stock Level</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.minStockLevel}
-                  onChange={e => setForm(f => ({ ...f, minStockLevel: e.target.value }))}
-                  className={`mt-1 ${fieldErrors.minStockLevel ? 'border-destructive' : ''}`}
-                />
-                {fieldErrors.minStockLevel && <p className="text-xs text-destructive mt-1">{fieldErrors.minStockLevel}</p>}
-              </div>
-              <div>
-                <Label>Reorder Level</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.reorderLevel}
-                  onChange={e => setForm(f => ({ ...f, reorderLevel: e.target.value }))}
-                  className={`mt-1 ${fieldErrors.reorderLevel ? 'border-destructive' : ''}`}
-                />
-                {fieldErrors.reorderLevel && <p className="text-xs text-destructive mt-1">{fieldErrors.reorderLevel}</p>}
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

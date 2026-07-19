@@ -1,5 +1,7 @@
 'use client'
 
+import { money } from '@/lib/currency'
+
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { PageHeader } from '@/components/layout/page-header'
@@ -52,7 +54,6 @@ export default function GrnsPage() {
   const [type, setType] = useState<GrnType>('VENDOR')
   const [vendorId, setVendorId] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [reference, setReference] = useState('')
   const [lines, setLines] = useState<LineRow[]>([blankLine()])
 
   const [viewing, setViewing] = useState<Grn | null>(null)
@@ -92,7 +93,6 @@ export default function GrnsPage() {
     setType('VENDOR')
     setVendorId('')
     setDate(new Date().toISOString().slice(0, 10))
-    setReference('')
     setLines([blankLine()])
     setSubmitError('')
     setFieldErrors({})
@@ -149,7 +149,6 @@ export default function GrnsPage() {
       type,
       vendorId: type === 'VENDOR' ? vendorId : undefined,
       date,
-      reference: reference.trim() || undefined,
       lines: payloadLines,
     })
 
@@ -203,8 +202,8 @@ export default function GrnsPage() {
                 <TableHead>Number</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Vendor</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Lines</TableHead>
+                <TableHead>Received Date</TableHead>
+                <TableHead className="text-right">Total Value</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -223,11 +222,11 @@ export default function GrnsPage() {
                   )}
                   {grns.map(grn => (
                     <TableRow key={grn.id}>
-                      <TableCell><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{grn.number}</span></TableCell>
-                      <TableCell><Badge variant="secondary">{grn.type}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{grn.vendor?.name ?? '—'}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{new Date(grn.date).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-muted-foreground">{grn.lines?.length ?? 0}</TableCell>
+                      <TableCell><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{grn.grnNo}</span></TableCell>
+                      <TableCell><Badge variant="secondary">{grn.sourceType}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{grn.vendorName ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{grn.receivedDate}</TableCell>
+                      <TableCell className="text-right font-medium">{grn.totalValue != null ? money(grn.totalValue) : '—'}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="icon" onClick={() => openView(grn)}><Eye className="h-4 w-4" /></Button>
                       </TableCell>
@@ -280,10 +279,6 @@ export default function GrnsPage() {
               <div>
                 <Label>Date</Label>
                 <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="mt-1" />
-              </div>
-              <div>
-                <Label>Reference (optional)</Label>
-                <Input value={reference} onChange={e => setReference(e.target.value)} className="mt-1" />
               </div>
             </div>
 
@@ -381,8 +376,11 @@ export default function GrnsPage() {
       <Dialog open={!!viewing} onOpenChange={open => !open && setViewing(null)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>GRN {viewing?.number}</DialogTitle>
-            <DialogDescription>{viewing?.type} · {viewing && new Date(viewing.date).toLocaleDateString()}</DialogDescription>
+            <DialogTitle>GRN {viewing?.grnNo}</DialogTitle>
+            <DialogDescription>
+              {viewing?.sourceType}{viewing?.vendorName ? ` · ${viewing.vendorName}` : ''} · {viewing?.receivedDate}
+              {viewing?.totalValue != null ? ` · ${money(viewing.totalValue)}` : ''}
+            </DialogDescription>
           </DialogHeader>
           {isViewLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
